@@ -1,0 +1,31 @@
+[tool.kedro]
+package_name = "demand_forecasting"
+project_name = "Demand Forecasting"
+kedro_init_version = "0.19.4"
+tools = [ "None",]
+example_pipeline = "True"
+source_dir = "src"
+
+[tool.poetry]
+name = "demand-forecasting"
+version = "0.1.0"
+description = "Trabalho de Graduação do curso de Análise e Desenvolvimento de Sistemas, da Fatec Rio Preto."
+authors = ["lborgatow <lborgatow@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+kedro = "0.19.4"
+kedro-datasets = {version = ">=3.0", extras = ["pandas-csvdataset", "pandas-exceldataset", "pandas-parquetdataset"]}
+scikit-learn = "1.4.2"
+pandas = "2.2.2"
+
+
+[tool.poetry.scripts]
+demand-forecasting = "demand_forecasting.__main__:main"
+
+[tool.poetry.plugins."kedro.hooks"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
