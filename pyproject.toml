@@ -18,6 +18,8 @@ python = "^3.10"
 kedro = "0.19.4"
 polars = "0.20.21"
 numpy = "1.26.4"
+kedro-datasets = "3.0.0"
+pyarrow = "15.0.2"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "8.23.0"
