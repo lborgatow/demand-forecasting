@@ -15,6 +15,13 @@ This modular pipeline preprocesses the raw data (`preprocess_data_node`) and def
 
 ## Pipeline outputs
 
+### `processed_data`
+
+|      |                    |
+| ---- | ------------------ |
+| Type | `polars.DataFrame` |
+| Description | Preprocessed temporal data |
+
 ### `unique_ids`
 
 |      |                    |
