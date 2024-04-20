@@ -1,0 +1,2 @@
+# Métricas de avaliação de desempenho do projeto
+METRICS: ['smape', 'rmsle', 'owa']
