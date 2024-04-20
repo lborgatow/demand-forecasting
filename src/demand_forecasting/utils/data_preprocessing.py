@@ -15,7 +15,7 @@ def create_unique_id(df: pl.DataFrame) -> pl.DataFrame:
     """
 
     return df.with_columns(
-        pl.concat_str(["store", "item"], separator="_").alias("unique_id")
+        pl.concat_str(["store", "item"], separator="_").alias("uid")
     )
 
 
@@ -30,9 +30,12 @@ def process_data(data: pl.DataFrame) -> pl.DataFrame:
     """
 
     df = create_unique_id(data)
-    df = df.with_columns(df["date"].str.to_datetime())
+    df = df.with_columns(
+        pl.col("date").str.to_datetime().alias("ds"),
+        pl.col("sales").alias("y")
+    ).drop(["date", "sales"])
 
-    return df.select(["date", "unique_id", "store", "item", "sales"])
+    return df.select(["ds", "uid", "store", "item", "y"])
 
 
 def get_unique_ids(data: pl.DataFrame) -> List[str]:
@@ -45,5 +48,5 @@ def get_unique_ids(data: pl.DataFrame) -> List[str]:
         List[str]: List of unique_ids.
     """
 
-    return data["unique_id"].unique().sort().to_list()
+    return data["uid"].unique().sort().to_list()
 
