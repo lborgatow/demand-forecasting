@@ -1,2 +1,14 @@
 # Métricas de avaliação de desempenho do projeto
 METRICS: ['smape', 'rmsle', 'owa']
+
+# Quantidade de dados para teste
+TEST_SIZE: 30
+
+# Quantidade de dados para serem previstos
+PREDICT_SIZE: 30
+
+# Quantidade de folds para validação cruzada
+CV_FOLDS: 4
+
+# Comprimento do passo para gerar os folds da validação cruzada
+CV_STEP_LENGTH: 30

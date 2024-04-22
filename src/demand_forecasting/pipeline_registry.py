@@ -3,7 +3,7 @@ from typing import Dict
 
 from kedro.pipeline import Pipeline
 
-from demand_forecasting.pipelines import data_preprocessing
+from demand_forecasting.pipelines import data_preprocessing, get_results
 
 
 def register_pipelines() -> Dict[str, Pipeline]:
@@ -15,7 +15,8 @@ def register_pipelines() -> Dict[str, Pipeline]:
     """
     
     preprocess_data = data_preprocessing.create_pipeline()
+    get_all_results = get_results.create_pipeline()
     
     return {
-        "__default__": preprocess_data
+        "__default__": preprocess_data + get_all_results
     }
