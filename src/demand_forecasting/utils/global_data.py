@@ -26,7 +26,7 @@ class GlobalData(Metrics):
             pl.DataFrame: DataFrame with the filtered data.
         """
 
-        return self.data.filter(pl.col("unique_id") == unique_id).sort(by="date")
+        return self.data.filter(pl.col("uid") == unique_id).sort(by="ds")
 
 
     def get_metrics(self, y_true: Union[List[float], np.ndarray, pl.Series], 

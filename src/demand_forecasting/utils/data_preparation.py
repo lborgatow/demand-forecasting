@@ -87,6 +87,6 @@ def prepare_data(global_data: GlobalData,
         Dict[str, Union[pd.Series, bool, str]]: Dictionary with the prepared data.
     """
     
-    filtered_data = global_data.filter_data(unique_id=unique_id)
+    filtered_data = global_data.filter_and_sort_data(unique_id=unique_id)
 
     return data_transformation(original_data=filtered_data)
