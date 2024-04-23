@@ -23,12 +23,8 @@ def data_separators(preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
     fh_test = list(range(1, test_size+1))
     initial_window = len(transformed_data) - (test_size + ((folds - 1)*step_length))
     crossval = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
-    
-    predict_size = parameters.get("PREDICT_SIZE")
-    fh_predict = list(range(1,predict_size+1))
 
     return {
         "fh_test": fh_test,
-        "fh_predict": fh_predict,
         "cv": crossval
     }
