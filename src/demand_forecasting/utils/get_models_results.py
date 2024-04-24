@@ -31,8 +31,8 @@ def get_sma_results(global_data: GlobalData, preparated_data_dict: Dict[str, Uni
     end = time.time()
     execution_time = end - start
 
-    uid = preparated_data_dict.get("original_data")["uid"][0]
+    unique_id = preparated_data_dict.get("original_data")["unique_id"][0]
 
-    return get_results_df(uid=uid, model="SimpleMovingAverage", execution_time=execution_time,
+    return get_results_df(unique_id=unique_id, model="SimpleMovingAverage", execution_time=execution_time,
                           metrics_values=sma_metrics, parameters=parameters)
 

@@ -3,12 +3,12 @@ from typing import Dict, List, Any
 import polars as pl
 
 
-def get_results_df(uid: str, model: str, execution_time: float, metrics_values: List[float], 
+def get_results_df(unique_id: str, model: str, execution_time: float, metrics_values: List[float], 
                    parameters: Dict[str, Any]) -> pl.DataFrame:
     """Get the DataFrame with model results.
 
     Args:
-        uid (str): Unique ID.
+        unique_id (str): Unique ID.
         model (str): Model name.
         execution_time (str): Model execution time.
         metrics_values (List[float]): List of model metrics in order.
@@ -18,11 +18,11 @@ def get_results_df(uid: str, model: str, execution_time: float, metrics_values: 
         pl.DataFrame: DataFrame with the model's results, metrics and predictions.
     """
 
-    store, item = uid.split("_")
+    store, item = unique_id.split("_")
     metrics = parameters.get("METRICS")
 
     results = {
-        "uid": [uid], "store": [store], "item": [item], "model": [model], "execution_time": [execution_time],
+        "unique_id": [unique_id], "store": [store], "item": [item], "model": [model], "execution_time": [execution_time],
     }
 
     for i, metric in enumerate(metrics):
