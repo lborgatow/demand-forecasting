@@ -63,6 +63,10 @@ class Metrics:
             float: OWA value.
         """
         
+        y_true = np.array(y_true).ravel()
+        y_pred = np.array(y_pred).ravel()
+        y_naive = np.array(y_naive).ravel()
+        
         model_smape = self.smape(y_true, y_pred)
         naive_smape = self.smape(y_true, y_naive)
         

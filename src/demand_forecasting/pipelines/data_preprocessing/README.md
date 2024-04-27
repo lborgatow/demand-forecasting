@@ -19,7 +19,7 @@ This modular pipeline preprocesses the raw data (`preprocess_data_node`) and def
 
 |      |                    |
 | ---- | ------------------ |
-| Type | `polars.DataFrame` |
+| Type | `polars.LazyFrame` |
 | Description | Preprocessed temporal data |
 
 ### `unique_ids`

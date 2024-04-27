@@ -17,22 +17,23 @@ def preprocess_data(data: pl.DataFrame) -> Tuple[pl.DataFrame, List[str]]:
         list with unique ids.
     """
 
-    # data = pl.DataFrame(data)
     processed_data = process_data(data=data)
     unique_ids = get_unique_ids(data=processed_data)
 
     return processed_data, unique_ids
 
 
-def define_global_data(processed_data: pl.DataFrame, parameters: Dict[str, Any]) -> GlobalData:
+def define_global_data(processed_data: pl.LazyFrame, parameters: Dict[str, Any]) -> GlobalData:
     """Define the objects that will be used in all prediction runs.
 
     Args:
-        processed_data (pl.DataFrame): DataFrame with the processed temporal data.
+        processed_data (pl.LazyFrame): LazyFrame with the processed temporal data.
         parameters (Dict[str, Dict[str, Any]]): Dictionary with global parameters.
 
     Returns:
         GlobalData: Object of the GlobalData class.
     """
 
-    return GlobalData(processed_data, parameters.get("METRICS"))
+    processed_data_df = processed_data.collect()
+    return GlobalData(processed_data_df, parameters.get("METRICS"))
+    
