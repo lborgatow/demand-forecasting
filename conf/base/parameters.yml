@@ -13,5 +13,8 @@ CV_FOLDS: 4
 # Comprimento do passo para gerar os folds da validação cruzada
 CV_STEP_LENGTH: 30
 
-# Possibilidades de tamanho de janela da Média Móvel Simples
-SMA_WINDOWS: [7, 14, 30, 60, 90, 120, 180, 365]
+# Possibilidades de sazonalidades mensais para as séries temporais
+SEASONALITIES: [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]
+
+# Número de experimentos do Optuna
+OPTUNA_TRIALS: 30
