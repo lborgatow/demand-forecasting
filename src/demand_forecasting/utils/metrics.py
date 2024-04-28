@@ -46,7 +46,10 @@ class Metrics:
         y_true = np.array(y_true).ravel()
         y_pred = np.array(y_pred).ravel()
 
-        return np.sqrt(np.mean((np.log1p(y_true) - np.log1p(y_pred)) ** 2))
+        metric = (np.log1p(y_true) - np.log1p(y_pred)) ** 2
+        aux = np.where((y_true == 0) & (y_pred == 0), 0.0, metric)
+        
+        return np.sqrt(np.mean(aux))
     
     
     def owa(self, y_true: Union[List[float], np.ndarray, pl.Series], 

@@ -47,12 +47,14 @@ def data_transformation(original_data: pl.DataFrame) -> Dict[str, Union[str, pl.
             }
 
 
-def reverse_transformation(original_data: np.ndarray, transformed_data: np.ndarray, 
-                           transformation: str, is_predict: bool) -> np.ndarray:
+def reverse_transformation(original_data: np.ndarray, original_data_idx: int,
+                           transformed_data: np.ndarray, transformation: str, 
+                           is_predict: bool) -> np.ndarray:
     """Reverse the data transformation.
 
     Args:
         original_data (np.ndarray): Original data.
+        original_data_idx (int): Initial index of original data for data reversals that are not predictions.
         transformed_data (np.ndarray): Transformed data.
         transformation (str): Transformation used.
         is_predict (bool): Boolean that indicates whether the transformed data is a prediction
@@ -66,7 +68,7 @@ def reverse_transformation(original_data: np.ndarray, transformed_data: np.ndarr
         if is_predict:
             return np.cumsum(np.insert(transformed_data, 0, original_data[-1]))[1:]
         else:
-            return np.cumsum(np.insert(transformed_data, 0, original_data[0]))
+            return np.cumsum(np.insert(transformed_data, 0, original_data[original_data_idx]))[:-1]
     elif transformation == "log":
         return np.expm1(transformed_data)
     elif transformation == "cbrt":
