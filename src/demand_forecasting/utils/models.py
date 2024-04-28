@@ -1,12 +1,10 @@
-from typing import Dict, List, Union, Any, Type
+from typing import Dict, List, Tuple, Union, Any, Type
 from functools import partial
 
 import polars as pl
 import numpy as np
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
-from darts.utils.utils import ModelMode, SeasonalityMode
-from darts.timeseries import TimeSeries
-from darts.models import ExponentialSmoothing
+from sktime.forecasting.exp_smoothing import ExponentialSmoothing
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -39,6 +37,33 @@ def treat_predictions(preds: np.ndarray) -> np.ndarray:
     
     return np.nan_to_num(np.maximum(np.round(preds), 0), nan=0.0)
 
+
+def reverse_transformations(y_true: np.ndarray, y_pred: np.ndarray, original_data: np.ndarray, 
+                            original_data_idx: int, transformation: str) -> Tuple[np.ndarray]:
+    """Reverse the transformation of test data and predictions.
+
+    Args:
+        y_true (np.ndarray): Test data.
+        y_pred (np.ndarray): Predict data.
+        original_data (np.ndarray): Original data.
+        original_data_idx (int): Initial index of original data for data reversals that are not predictions.
+        transformation (str): Transformation used.
+
+    Returns:
+        Tuple[np.ndarray]: Test data and predictions with the transformation reversed.
+    """
+    
+    test = reverse_transformation(original_data=original_data, transformed_data=y_true, 
+                                  transformation=transformation, original_data_idx=original_data_idx, 
+                                  is_predict=False)
+    
+    preds = reverse_transformation(original_data=original_data, transformed_data=y_pred, 
+                                  transformation=transformation, original_data_idx=original_data_idx, 
+                                  is_predict=True)
+    
+    return test, preds
+    
+
 # ====================================== Simple Moving Average ======================================
 
 def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
@@ -56,22 +81,16 @@ def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[st
         List[float]: List with the results of the calculated metrics.
     """ 
     
-    data = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    data = preparated_data_dict.get("original_data")["y"].to_numpy()
     test_size = parameters.get('TEST_SIZE')
 
-    train = data[train_idx.tolist()]
-    test = data[test_idx.tolist()]
+    train = data[train_idx]
+    test = data[test_idx]
 
     model = train[-window:].mean()
     preds = repeat_val(val=model, size=test_size)
-    
-    original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
-    preds = reverse_transformation(original_data=original_data, transformed_data=preds, 
-                                   transformation=transformation, is_predict=True)
-    preds = treat_predictions(preds=preds)
-
     naive = repeat_val(val=train[-1], size=test_size)
-    
+
     return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
 
 
@@ -91,7 +110,7 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
         a list of performance metrics for that window.
     """
 
-    data = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    data = preparated_data_dict.get("original_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     windows = parameters.get("SEASONALITIES") 
     
@@ -112,19 +131,20 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
         "best_metrics": best_metrics
     }
 
-# ====================================== Darts ======================================
+# ============================================== Sktime =============================================
 
-def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
-                 model: Any, model_params: Dict[str, Any], parameters: Dict[str, Any], 
-                 train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
-    """Get performance metrics for Darts library models using cross-validation.
+def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                  data_separators_dict: Dict[str, Union[List[int], Type[EWS]]],
+                  model: Any, model_params: Dict[str, Any], 
+                  train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+    """Get performance metrics for Sktime library models using cross-validation.
 
     Args:
         global_data (GlobalData): Object of the GlobalData class.
         preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
         model (Any): Model used for testing and predictions.
         model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
-        parameters (Dict[str, Union[List[str], List[int], str, int]]): Dictionary with global parameters.
         train_idx (np.ndarray): Array with training data indices.
         test_idx (np.ndarray): Array with test data indexes.
 
@@ -133,30 +153,29 @@ def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[
     """
     
     data = preparated_data_dict.get("transformed_data").to_pandas()
-    ts_data = TimeSeries.from_dataframe(data, "ds", "y", freq="1d")
-    test_size = parameters.get("TEST_SIZE")
+    series = data.set_index("ds").sort_index().asfreq("D")["y"].squeeze()
+    fh_test = data_separators_dict.get("fh_test")
     
-    train = ts_data[train_idx.tolist()]
-    test = ts_data[test_idx.tolist()].values()
+    train = series.iloc[train_idx]
+    test = series.iloc[test_idx].values
 
     model_fit = model(**model_params)
     model_fit.fit(train)
-    preds = np.array(model_fit.predict(test_size).values()).ravel()
+    preds = np.array(model_fit.predict(fh=fh_test)).ravel()
 
     original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
-    preds = reverse_transformation(original_data=original_data, transformed_data=preds, 
-                                   transformation=transformation, is_predict=True)
+    test, preds = reverse_transformations(y_true=test, y_pred=preds, original_data=original_data["y"].to_numpy(),
+                                          original_data_idx=test_idx[0], transformation=transformation)
     preds = treat_predictions(preds=preds)
-
-    naive = repeat_val(val=train.univariate_values()[-1], size=test_size)
-        
+    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=len(fh_test))
+    
     return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
 
-# ====================================== ExponentialSmoothing (Darts) ======================================
+# ================================== ExponentialSmoothing (Sktime) ==================================
 
 def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
                            data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
-    """Optuna study objective function for the ExponentialSmoothing model from the Darts library.
+    """Optuna study objective function for the ExponentialSmoothing model from the Sktime library.
 
     Args:
         trial (Any): Experiment of the optuna study.
@@ -172,30 +191,24 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
     data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
-    
-    mm_none = ModelMode.NONE
-    mm_add = ModelMode.ADDITIVE
-    mm_mult = ModelMode.MULTIPLICATIVE
-    sm_none = SeasonalityMode.NONE
-    sm_add = SeasonalityMode.ADDITIVE
-    sm_mult = SeasonalityMode.MULTIPLICATIVE
 
-    seasonal_periods = parameters.get("SEASONALITIES")
+    sp = parameters.get("SEASONALITIES")
 
     # try:
     model_params = {
         "random_state": 42,
-        "seasonal_periods": trial.suggest_categorical("seasonal_periods", seasonal_periods),
+        "use_brute": False,
+        "initialization_method": trial.suggest_categorical("initialization_method", ["estimated", "heuristic"]),
+        "sp": trial.suggest_categorical("sp", sp)
     }
     if min(data_array) <= 0.0:
-        model_params["trend"] = trial.suggest_categorical("trend", [mm_none, mm_add])
-        model_params["seasonal"] = trial.suggest_categorical("seasonal", [sm_none, sm_add])
+        model_params["trend"] = trial.suggest_categorical("trend_min<=0", ["additive", None])
+        model_params["seasonal"] = trial.suggest_categorical("seasonal_min<=0", ["additive", None])
     else:
-        model_params['trend'] = trial.suggest_categorical("trend", [mm_none, mm_add, mm_mult])
-        model_params["seasonal"] = trial.suggest_categorical("seasonal", [sm_none, sm_add, sm_mult])
-    model_params["kwargs"] = {"initialization_method": trial.suggest_categorical("initialization_method", ["estimated", "heuristic"])}
+        model_params["trend"] = trial.suggest_categorical("trend_min>0", ["additive", "multiplicative", None])
+        model_params["seasonal"] = trial.suggest_categorical("seasonal_min>0", ["additive", "multiplicative", None])
 
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, ExponentialSmoothing, model_params, parameters)
+    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     # except:
     #     return [np.inf] * len_metrics
