@@ -5,6 +5,7 @@ import polars as pl
 import numpy as np
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 from sktime.forecasting.exp_smoothing import ExponentialSmoothing
+from sktime.forecasting.arima import ARIMA
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -209,6 +210,46 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
         model_params["seasonal"] = trial.suggest_categorical("seasonal_min>0", ["additive", "multiplicative", None])
 
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    # except:
+    #     return [np.inf] * len_metrics
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ================================== ARIMA (Sktime) ==================================
+
+def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                    data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the ARIMA model from the Sktime library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+
+    p = trial.suggest_int("p", 1, 4)
+    d = trial.suggest_int("d", 0, 1)
+    q = trial.suggest_int("q", 0, 4)
+
+    # try:
+    model_params = {
+        "suppress_warnings": True,
+        "maxiter": 1,
+        "order": (p, d, q),
+        "method": trial.suggest_categorical("method", ["nm", "lbfgs", "powell"])
+    }
+
+    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     # except:
     #     return [np.inf] * len_metrics
