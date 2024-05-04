@@ -65,7 +65,7 @@ def reverse_transformations(y_true: np.ndarray, y_pred: np.ndarray, original_dat
     return test, preds
     
 
-# ====================================== Simple Moving Average ======================================
+# =============================================== Simple Moving Average ===============================================
 
 def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
                parameters: Dict[str, Any], window: int, train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
@@ -82,7 +82,7 @@ def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[st
         List[float]: List with the results of the calculated metrics.
     """ 
     
-    data = preparated_data_dict.get("original_data")["y"].to_numpy()
+    data = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     test_size = parameters.get('TEST_SIZE')
 
     train = data[train_idx]
@@ -90,7 +90,13 @@ def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[st
 
     model = train[-window:].mean()
     preds = repeat_val(val=model, size=test_size)
-    naive = repeat_val(val=train[-1], size=test_size)
+    
+    original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
+    test, preds = reverse_transformations(y_true=test, y_pred=preds, original_data=original_data["y"].to_numpy(),
+                                          original_data_idx=test_idx[0], transformation=transformation)
+    preds = treat_predictions(preds=preds)
+    
+    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=test_size)
 
     return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
 
@@ -111,7 +117,7 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
         a list of performance metrics for that window.
     """
 
-    data = preparated_data_dict.get("original_data")["y"].to_numpy()
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     windows = parameters.get("SEASONALITIES") 
     
@@ -120,7 +126,7 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
 
     for window in windows:
         metrics_per_window = np.array([fit_cv_sma(global_data, preparated_data_dict, parameters, \
-            window, train_idx, test_idx) for train_idx, test_idx in cv.split(data)])
+            window, train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)])
         aux = np.mean(metrics_per_window, axis=0)
         metrics_means[window] = {metrics[i]: aux[i] for i in range(len(metrics))}
 
@@ -132,7 +138,7 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
         "best_metrics": best_metrics
     }
 
-# ============================================== Sktime =============================================
+# ======================================================= Sktime ======================================================
 
 def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
                   data_separators_dict: Dict[str, Union[List[int], Type[EWS]]],
@@ -168,11 +174,12 @@ def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union
     test, preds = reverse_transformations(y_true=test, y_pred=preds, original_data=original_data["y"].to_numpy(),
                                           original_data_idx=test_idx[0], transformation=transformation)
     preds = treat_predictions(preds=preds)
+    
     naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=len(fh_test))
     
     return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
 
-# ================================== ExponentialSmoothing (Sktime) ==================================
+# ==================================== ExponentialSmoothing (Sktime - statsmodels) ====================================
 
 def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
                            data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
@@ -195,11 +202,9 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
 
     sp = parameters.get("SEASONALITIES")
 
-    # try:
     model_params = {
         "random_state": 42,
         "use_brute": False,
-        "initialization_method": trial.suggest_categorical("initialization_method", ["estimated", "heuristic"]),
         "sp": trial.suggest_categorical("sp", sp)
     }
     if min(data_array) <= 0.0:
@@ -211,12 +216,10 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
 
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
-    # except:
-    #     return [np.inf] * len_metrics
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
-# ================================== ARIMA (Sktime) ==================================
+# ============================================= ARIMA (Sktime - pmdarima) =============================================
 
 def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
                     data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
@@ -241,7 +244,6 @@ def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: D
     d = trial.suggest_int("d", 0, 1)
     q = trial.suggest_int("q", 0, 4)
 
-    # try:
     model_params = {
         "suppress_warnings": True,
         "maxiter": 1,
@@ -251,7 +253,5 @@ def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: D
 
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
-    # except:
-    #     return [np.inf] * len_metrics
-        
+    
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
