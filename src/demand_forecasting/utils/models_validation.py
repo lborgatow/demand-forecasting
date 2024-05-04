@@ -1,22 +1,13 @@
-# import os
-# import contextlib
 from typing import Dict, List, Union, Callable, Any, Type
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
 import polars as pl
 import numpy as np
 import optuna
 
+# import warnings
 
-# @contextlib.contextmanager
-# def suppress_stdout() -> None:
-#     """Suppress output by redirecting it to "devnull".
-#     """
-    
-#     with open(os.devnull, 'w') as fnull:
-#         with contextlib.redirect_stdout(fnull):
-#      
+# optuna.logging.set_verbosity(optuna.logging.CRITICAL)
+# warnings.filterwarnings(action="ignore")
 
 
 def get_optuna_study(objective_func: Callable, trials: int, len_metrics: int) -> Type[optuna.Study]:
@@ -80,17 +71,18 @@ def get_best_trial_results(study: Type[optuna.Study], parameters: Dict[str, Any]
     trial_metrics = trial_with_lowest_metric.values
         
     return {
-        'best_params': params,
-        'trial_metrics': trial_metrics
+        "best_params": params,
+        "trial_metrics": trial_metrics
     }
 
 
-def get_results_df(unique_id: str, model: str, execution_time: float, metrics_values: List[float], 
-                   parameters: Dict[str, Any]) -> pl.DataFrame:
+def get_results_df(unique_id: str, transformation: str, model: str, execution_time: float, 
+                   metrics_values: List[float], parameters: Dict[str, Any]) -> pl.DataFrame:
     """Get the DataFrame with model results.
 
     Args:
         unique_id (str): Unique ID.
+        transformation (str): Transformation to try to make the series stationary.
         model (str): Model name.
         execution_time (str): Model execution time.
         metrics_values (List[float]): List of model metrics in order.
@@ -104,7 +96,12 @@ def get_results_df(unique_id: str, model: str, execution_time: float, metrics_va
     metrics = parameters.get("METRICS")
 
     results = {
-        "unique_id": [unique_id], "store": [store], "item": [item], "model": [model], "execution_time": [execution_time],
+        "unique_id": [unique_id], 
+        "store": [store], 
+        "item": [item], 
+        "transformation": [transformation], 
+        "model": [model], 
+        "execution_time": [execution_time],
     }
 
     for i, metric in enumerate(metrics):
