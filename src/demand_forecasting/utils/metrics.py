@@ -76,7 +76,7 @@ class Metrics:
         model_rmsle = self.rmsle(y_true, y_pred)
         naive_rmsle = self.rmsle(y_true, y_naive)
         
-        return np.mean((model_smape / naive_smape) + (model_rmsle / naive_rmsle))
+        return ((model_smape / naive_smape) + (model_rmsle / naive_rmsle)) / 2
 
 
     def run_metrics(self, metrics: List[str], 
