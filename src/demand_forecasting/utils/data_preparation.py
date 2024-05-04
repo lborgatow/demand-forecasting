@@ -32,7 +32,7 @@ def data_transformation(original_data: pl.DataFrame) -> Dict[str, Union[str, pl.
 
     transformations = {
         "original": original_data["y"].to_numpy(),
-        "diff": np.diff(original_data["y"]),
+        # "diff": np.diff(original_data["y"]),
         "log": np.log1p(original_data["y"]),
         "cbrt": np.cbrt(original_data["y"])
     }
@@ -45,6 +45,12 @@ def data_transformation(original_data: pl.DataFrame) -> Dict[str, Union[str, pl.
                 "original_data": original_data,
                 "transformed_data": data.with_columns(y=transformation)
             }
+    
+    return {
+            "transformation": "original",
+            "original_data": original_data,
+            "transformed_data": data.with_columns(y=transformations.get("original"))
+        }
 
 
 def reverse_transformation(original_data: np.ndarray, original_data_idx: int,
