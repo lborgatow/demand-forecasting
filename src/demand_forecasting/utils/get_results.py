@@ -4,7 +4,7 @@ import polars as pl
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 
 from .global_data import GlobalData
-from .models import objective_expsmoothing, objective_arima
+from .models import objective_expsmoothing, objective_arima, objective_prophet
 from .get_models_results import get_sma_results, get_sktime_results
 
 
@@ -34,4 +34,8 @@ def get_models_results(global_data: GlobalData, preparated_data_dict: Dict[str, 
                                   data_separators_dict=data_separators_dict, model="ARIMA",
                                   model_objective=objective_arima, parameters=parameters)
     
-    return pl.concat([df_sma, df_expsmoothing, df_arima])
+    df_prophet = get_sktime_results(global_data=global_data, preparated_data_dict=preparated_data_dict,
+                                    data_separators_dict=data_separators_dict, model="Prophet",
+                                    model_objective=objective_prophet, parameters=parameters)
+    
+    return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet])

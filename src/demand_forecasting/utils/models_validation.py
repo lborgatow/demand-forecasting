@@ -1,11 +1,13 @@
 from typing import Dict, List, Union, Callable, Any, Type
+import logging
+# import warnings
 
 import polars as pl
 import numpy as np
 import optuna
 
-# import warnings
 
+logging.getLogger("cmdstanpy").disabled = True
 # optuna.logging.set_verbosity(optuna.logging.CRITICAL)
 # warnings.filterwarnings(action="ignore")
 

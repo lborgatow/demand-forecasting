@@ -6,6 +6,7 @@ import numpy as np
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 from sktime.forecasting.exp_smoothing import ExponentialSmoothing
 from sktime.forecasting.arima import ARIMA
+from sktime.forecasting.fbprophet import Prophet
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -254,4 +255,45 @@ def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: D
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ================================================= Prophet (Sktime) ==================================================
+
+def objective_prophet(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                      data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the Prophet model from the Sktime library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+
+    sp = parameters.get("SEASONALITIES")
+
+    model_params = {
+        "freq": "D",
+        "add_country_holidays": {"country_name": "Brazil"},
+        "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
+        "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
+        "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
+        "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95)
+    }
+    if min(data_array) <= 0.0:
+        model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min<=0", ["additive"])
+    else:
+        model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min>0", ["additive", "multiplicative"])
+
+    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, Prophet, model_params)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
