@@ -7,6 +7,8 @@ from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 from sktime.forecasting.exp_smoothing import ExponentialSmoothing
 from sktime.forecasting.arima import ARIMA
 from sktime.forecasting.fbprophet import Prophet
+from xgboost import XGBRegressor
+import pytimetk as tk
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -84,7 +86,7 @@ def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[st
     """ 
     
     data = preparated_data_dict.get("transformed_data")["y"].to_numpy()
-    test_size = parameters.get('TEST_SIZE')
+    test_size = parameters.get("TEST_SIZE")
 
     train = data[train_idx]
     test = data[test_idx]
@@ -295,5 +297,150 @@ def objective_prophet(trial: Any, global_data: GlobalData, preparated_data_dict:
 
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, Prophet, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ================================================= XGBoost (xgboost) ==================================================
+
+def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[pl.DataFrame]:
+    """Create features from a series to perform predictions with tree models like XGBoost.
+
+    Args:
+        df (pl.DataFrame): Series to predict transformed into DataFrame.
+        future (int): Number of future dates for prediction.
+        lags (int): Lags for generating model features.
+
+    Returns:
+        Tuple[pl.DataFrame]: Tuple with the DataFrame for training/testing and the DataFrame for 
+        future predictions.
+    """
+    
+    df = df.select(["ds", "y"]).sort(by="ds").to_pandas()
+    future_df = df.future_frame("ds", future)
+    df_dates = future_df.augment_timeseries_signature(date_column="ds")
+    df_lags = df_dates.augment_lags(
+        date_column="ds", 
+        value_column="y", 
+        lags=[lag for lag in range(30, lags+1, 30)]
+    )
+        
+    lag_columns = [col for col in df_lags.columns if "lag" in col]
+
+    df_no_nas = df_lags.dropna(subset=lag_columns, inplace=False).set_index("ds")
+    df_no_nas.index = df_no_nas.index.to_period()
+    
+    columns = [ 
+        "y"
+        , "ds_year"
+        , "ds_half"
+        , "ds_quarter"
+        , "ds_month"
+        # , "ds_yweek"
+        , "ds_mweek"
+        , "ds_wday"
+        , "ds_mday"
+    ] + [f"y_lag_{lag}" for lag in range(30, lags+1, 30)] 
+    
+    final_df = pl.DataFrame(df_no_nas[df_no_nas["y"].notnull()][columns])
+    future_df = pl.DataFrame(df_no_nas[df_no_nas["y"].isnull()][columns])
+    
+    return final_df, future_df
+
+
+def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]], train_df: pl.DataFrame, 
+                   model_params: Dict[str, Any], parameters: Any, train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+    """Get performance metrics for XGBoost model using cross-validation.
+
+    Args:
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        train_df (pl.DataFrame): DataFrame with the data for XGBoost training.
+        model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+        train_idx (np.ndarray): Array with training data indices.
+        test_idx (np.ndarray): Array with test data indexes.
+
+    Returns:
+        List[float]: List with the results of the calculated metrics.
+    """
+    
+    test_size = parameters.get("TEST_SIZE")
+    
+    X_train = train_df[train_idx].select(train_df.columns[1:])
+    y_train = train_df[train_idx].select(train_df.columns[0])
+    X_test = train_df[test_idx].select(train_df.columns[1:])
+    y_test = train_df[test_idx].select(train_df.columns[0])
+    
+    X_train = X_train[:-test_size]
+    X_val = X_train[-test_size:]
+    y_train = y_train[:-test_size]
+    y_val = y_train[-test_size:]
+
+    model_fit = XGBRegressor(**model_params)
+    
+    model_fit.fit(X_train, y_train,
+                  eval_set=[(X_train, y_train), (X_val, y_val)],
+                  verbose=False)
+    
+    preds = model_fit.predict(X_test)
+    preds = np.array(model_fit.predict(X_test)).ravel()
+
+    original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
+    test, preds = reverse_transformations(y_true=y_test, y_pred=preds, original_data=original_data["y"].to_numpy(),
+                                          original_data_idx=test_idx[0], transformation=transformation)
+    preds = treat_predictions(preds=preds)
+    
+    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=test_size)
+    
+    return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
+
+
+def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]], 
+                      parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the XGBBoost model.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+    
+    data = preparated_data_dict.get("transformed_data")
+    test_size = parameters.get("TEST_SIZE")
+    len_metrics = len(global_data.metrics)
+    seasonalities = parameters.get("SEASONALITIES")
+    
+    lags = trial.suggest_categorical("lags", seasonalities)
+    
+    model_params = {
+        "objective": "reg:squarederror",
+        "eval_metric": "rmsle",
+        "random_state": 42,
+        "early_stopping_rounds": 20,
+        "verbosity": 0,
+        "n_estimators": trial.suggest_int("n_estimators", 500, 700, 25),
+        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1e-1, log=True),
+        "max_depth": trial.suggest_int("max_depth", 4, 8),
+        "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+        "subsample": trial.suggest_float("subsample", 0.2, 0.9),
+        "colsample_bytree": trial.suggest_float("colsample_bytree",0.2, 0.9),
+        "colsample_bylevel": trial.suggest_float("colsample_bylevel",0.2, 0.9),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 1.0, log=True),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True)
+    }
+    
+    train_df, _ = create_features_pytimetk(df=data, lags=lags, future=test_size)
+    
+    folds, step_length = parameters.get("CV_FOLDS"), parameters.get("CV_STEP_LENGTH")
+    fh_test = list(range(1, test_size+1))
+    initial_window = len(train_df) - (test_size + ((folds - 1)*step_length))
+    cv = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
+    
+    fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, model_params, parameters)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
