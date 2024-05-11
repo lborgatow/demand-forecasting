@@ -9,6 +9,9 @@ from sktime.forecasting.arima import ARIMA
 from sktime.forecasting.fbprophet import Prophet
 from xgboost import XGBRegressor
 import pytimetk as tk
+from darts.timeseries import TimeSeries
+from darts.utils.utils import ModelMode, TrendMode, SeasonalityMode
+from darts.models import FourTheta
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -442,5 +445,95 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
     
     fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ======================================================= Darts =======================================================
+
+def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                 model: Any, model_params: Dict[str, Any], parameters: Dict[str, Any],
+                 train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+    """Get performance metrics for Darts library models using cross-validation.
+
+    Args:
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        model (Any): Model used for testing and predictions.
+        model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+        train_idx (np.ndarray): Array with training data indices.
+        test_idx (np.ndarray): Array with test data indexes.
+
+    Returns:
+        List[float]: List with the results of the calculated metrics.
+    """
+    
+    data = preparated_data_dict.get("transformed_data").to_pandas()
+    series = TimeSeries.from_dataframe(df=data, time_col="ds", value_cols="y", freq="D")
+    test_size = parameters.get("TEST_SIZE")
+    
+    train = series[train_idx.tolist()]
+    test = series[test_idx.tolist()].univariate_values()
+
+    model_fit = model(**model_params)
+    model_fit.fit(train)
+    preds = np.array(model_fit.predict(n=test_size).values()).ravel()
+
+    original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
+    test, preds = reverse_transformations(y_true=test, y_pred=preds, original_data=original_data["y"].to_numpy(),
+                                          original_data_idx=test_idx[0], transformation=transformation)
+    preds = treat_predictions(preds=preds)
+    
+    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=test_size)
+    
+    return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
+
+# ================================================= FourTheta (Darts) =================================================
+
+def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                        data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the FourTheta model from the Darts library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+
+    sp = parameters.get("SEASONALITIES")
+    
+    mm_add = ModelMode.ADDITIVE
+    mm_mult = ModelMode.MULTIPLICATIVE
+    tm_lin = TrendMode.LINEAR
+    tm_exp = TrendMode.EXPONENTIAL
+    sm_none = SeasonalityMode.NONE
+    sm_add = SeasonalityMode.ADDITIVE
+    sm_mult = SeasonalityMode.MULTIPLICATIVE
+
+    model_params = {
+        "theta": trial.suggest_int("theta", 0, 4),
+        "seasonality_period": trial.suggest_categorical("seasonality_period", sp),
+        "trend_mode": trial.suggest_categorical("trend_mode", [tm_lin, tm_exp]),
+        # "normalization": trial.suggest_categorical("normalization", [True, False])
+
+    }
+    if min(data_array) <= 0.0:
+        model_params["model_mode"] = trial.suggest_categorical("model_mode_min<=0", [mm_add])
+        model_params["season_mode"] = trial.suggest_categorical("season_mode_min<=0", [sm_none, sm_add])
+    else:
+        model_params["model_mode"] = trial.suggest_categorical("model_mode_min>0", [mm_add, mm_mult])
+        model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
+
+    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, model_params, parameters)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)

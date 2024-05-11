@@ -4,8 +4,19 @@ import polars as pl
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 
 from .global_data import GlobalData
-from .models import objective_expsmoothing, objective_arima, objective_prophet, objective_xgboost
-from .get_models_results import get_sma_results, get_sktime_results, get_xgboost_results
+from .models import (
+    objective_expsmoothing,
+    objective_arima,
+    objective_prophet,
+    objective_xgboost,
+    objective_fourtheta,
+)
+from .get_models_results import (
+    get_sma_results, 
+    get_sktime_results, 
+    get_xgboost_results, 
+    get_darts_results
+)
 
 
 def get_models_results(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
@@ -41,4 +52,8 @@ def get_models_results(global_data: GlobalData, preparated_data_dict: Dict[str, 
     df_xgboost = get_xgboost_results(global_data=global_data, preparated_data_dict=preparated_data_dict,
                                      model="XGBoost", model_objective=objective_xgboost, parameters=parameters)
     
-    return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet, df_xgboost])
+    df_fourtheta = get_darts_results(global_data=global_data, preparated_data_dict=preparated_data_dict,
+                                     data_separators_dict=data_separators_dict, model="FourTheta",
+                                     model_objective=objective_fourtheta, parameters=parameters)
+    
+    return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet, df_xgboost, df_fourtheta])
