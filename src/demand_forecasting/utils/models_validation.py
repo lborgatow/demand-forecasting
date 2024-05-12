@@ -7,7 +7,12 @@ import numpy as np
 import optuna
 
 
-logging.getLogger("cmdstanpy").disabled = True
+# logging.disable(logging.CRITICAL)
+# logging.getLogger("cmdstanpy").disabled = True
+# logging.getLogger("darts").disabled = True
+logging.getLogger("cmdstanpy").setLevel(logging.CRITICAL)
+logging.getLogger("darts").setLevel(logging.CRITICAL)
+logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
 # optuna.logging.set_verbosity(optuna.logging.CRITICAL)
 # warnings.filterwarnings(action="ignore")
 
@@ -25,7 +30,7 @@ def get_optuna_study(objective_func: Callable, trials: int, len_metrics: int) ->
     """
 
     study = optuna.create_study(
-        directions=['minimize'] * len_metrics, 
+        directions=["minimize"] * len_metrics, 
         sampler=optuna.samplers.TPESampler(
             seed=42, warn_independent_sampling=False
         )

@@ -11,7 +11,9 @@ from xgboost import XGBRegressor
 import pytimetk as tk
 from darts.timeseries import TimeSeries
 from darts.utils.utils import ModelMode, TrendMode, SeasonalityMode
-from darts.models import FourTheta
+from darts.models import FourTheta, NHiTSModel
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+import torch
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
@@ -351,7 +353,7 @@ def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[
 
 
 def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]], train_df: pl.DataFrame, 
-                   model_params: Dict[str, Any], parameters: Any, train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+                   model_params: Dict[str, Any], parameters: Dict[str, Any], train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
     """Get performance metrics for XGBoost model using cross-validation.
 
     Args:
@@ -522,8 +524,7 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
     model_params = {
         "theta": trial.suggest_int("theta", 0, 4),
         "seasonality_period": trial.suggest_categorical("seasonality_period", sp),
-        "trend_mode": trial.suggest_categorical("trend_mode", [tm_lin, tm_exp]),
-        # "normalization": trial.suggest_categorical("normalization", [True, False])
+        "trend_mode": trial.suggest_categorical("trend_mode", [tm_lin, tm_exp])
 
     }
     if min(data_array) <= 0.0:
@@ -534,6 +535,61 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
         model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
 
     fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, model_params, parameters)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ================================================== N-HiTS (Darts) ===================================================
+
+def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                    data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the N-HiTS model from the Darts library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+    sp = parameters.get("SEASONALITIES")
+    
+    torch.manual_seed(42)
+
+    early_stopper = EarlyStopping("train_loss", min_delta=0.05, patience=3, verbose=False)
+    pl_trainer_kwargs = {
+        "callbacks": [early_stopper],
+        "enable_progress_bar": False,
+        "enable_model_summary": False
+    }
+    
+    layer_exp = trial.suggest_int("layer_exp", 4, 7)
+    lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
+    
+    model_params = {
+        "random_state": 42,
+        "n_epochs": trial.suggest_int("n_epochs", 5, 50),
+        "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
+        "output_chunk_length": parameters.get("TEST_SIZE"),
+        "num_stacks": trial.suggest_int("num_stacks", 1, 3),
+        "num_blocks": trial.suggest_int("num_blocks", 1, 3),
+        "num_layers": trial.suggest_int("num_layers", 1, 3),
+        "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
+        "layer_widths": 2 ** layer_exp,
+        "batch_size": trial.suggest_int("batch_size", 32, 128, 32),
+        "loss_fn": torch.nn.MSELoss(),
+        "optimizer_kwargs": {"lr": lr},
+        "pl_trainer_kwargs": pl_trainer_kwargs,
+    }
+    
+    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
