@@ -67,6 +67,9 @@ def process_data(data: pl.DataFrame) -> pl.DataFrame:
     df = format_single_digit(data)
     df = create_unique_id(df)
     df = format_column_names(df)
+    df = df.with_columns(
+        pl.col("y").cast(pl.Int32).alias("y")
+    )
 
     return df.select(["ds", "unique_id", "store", "item", "y"])
 
