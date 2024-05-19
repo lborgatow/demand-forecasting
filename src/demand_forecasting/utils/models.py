@@ -453,7 +453,7 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
 # ======================================================= Darts =======================================================
 
 def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
-                 model: Any, model_params: Dict[str, Any], parameters: Dict[str, Any],
+                 model: Any,  is_dl: bool, model_params: Dict[str, Any], parameters: Dict[str, Any],
                  train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
     """Get performance metrics for Darts library models using cross-validation.
 
@@ -461,6 +461,7 @@ def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[
         global_data (GlobalData): Object of the GlobalData class.
         preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
         model (Any): Model used for testing and predictions.
+        is_dl (bool): Bool informing whether or not it is a deep learning model.
         model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
         parameters (Dict[str, Any]): Dictionary with global parameters.
         train_idx (np.ndarray): Array with training data indices.
@@ -476,9 +477,16 @@ def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[
     
     train = series[train_idx.tolist()]
     test = series[test_idx.tolist()].univariate_values()
-
+    
     model_fit = model(**model_params)
-    model_fit.fit(train)
+    if is_dl:
+        val_size = model_params.get("input_chunk_length") + model_params.get("output_chunk_length")
+        train = series[:-val_size]
+        val = series[-val_size:]
+        model_fit.fit(train, val_series=val)
+    else:
+        model_fit.fit(train)
+    
     preds = np.array(model_fit.predict(n=test_size).values()).ravel()
 
     original_data, transformation = preparated_data_dict.get("original_data"), preparated_data_dict.get("transformation")
@@ -534,7 +542,7 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
         model_params["model_mode"] = trial.suggest_categorical("model_mode_min>0", [mm_add, mm_mult])
         model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
 
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, model_params, parameters)
+    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, False, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
@@ -563,33 +571,32 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
     
     torch.manual_seed(42)
 
-    early_stopper = EarlyStopping("train_loss", min_delta=0.05, patience=3, verbose=False)
+    early_stopper = EarlyStopping("val_loss", min_delta=0.05, patience=3, verbose=False)
     pl_trainer_kwargs = {
         "callbacks": [early_stopper],
         "enable_progress_bar": False,
         "enable_model_summary": False
     }
     
-    layer_exp = trial.suggest_int("layer_exp", 4, 7)
     lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
     
     model_params = {
         "random_state": 42,
-        "n_epochs": trial.suggest_int("n_epochs", 5, 50),
+        "n_epochs": trial.suggest_int("n_epochs", 10, 50),
         "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
         "output_chunk_length": parameters.get("TEST_SIZE"),
         "num_stacks": trial.suggest_int("num_stacks", 1, 3),
         "num_blocks": trial.suggest_int("num_blocks", 1, 3),
         "num_layers": trial.suggest_int("num_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
-        "layer_widths": 2 ** layer_exp,
-        "batch_size": trial.suggest_int("batch_size", 32, 128, 32),
+        "layer_widths": trial.suggest_categorical("layer_widths", [64, 128, 256]),
+        "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
         "loss_fn": torch.nn.MSELoss(),
         "optimizer_kwargs": {"lr": lr},
-        "pl_trainer_kwargs": pl_trainer_kwargs,
+        "pl_trainer_kwargs": pl_trainer_kwargs
     }
     
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, model_params, parameters)
+    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, True, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
