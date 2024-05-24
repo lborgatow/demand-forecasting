@@ -11,7 +11,7 @@ from xgboost import XGBRegressor
 import pytimetk as tk
 from darts.timeseries import TimeSeries
 from darts.utils.utils import ModelMode, TrendMode, SeasonalityMode
-from darts.models import FourTheta, NHiTSModel
+from darts.models import FourTheta, NHiTSModel, TiDEModel
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch
 
@@ -582,7 +582,7 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
     
     model_params = {
         "random_state": 42,
-        "n_epochs": trial.suggest_int("n_epochs", 10, 50),
+        "n_epochs": trial.suggest_int("n_epochs", 20, 50),
         "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
         "output_chunk_length": parameters.get("TEST_SIZE"),
         "num_stacks": trial.suggest_int("num_stacks", 1, 3),
@@ -597,6 +597,64 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
     }
     
     fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, True, model_params, parameters)
+    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+
+# ================================================== TiDE (Darts) ===================================================
+
+def objective_tide(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                   data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the TiDE model from the Darts library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+    sp = parameters.get("SEASONALITIES")
+    
+    torch.manual_seed(42)
+
+    early_stopper = EarlyStopping("val_loss", min_delta=0.05, patience=3, verbose=False)
+    pl_trainer_kwargs = {
+        "callbacks": [early_stopper],
+        "enable_progress_bar": False,
+        "enable_model_summary": False
+    }
+    
+    lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
+    
+    model_params = {
+        "random_state": 42,
+        "n_epochs": trial.suggest_int("n_epochs", 20, 50),
+        "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
+        "output_chunk_length": parameters.get("TEST_SIZE"),
+        "num_encoder_layers": trial.suggest_int("num_encoder_layers", 1, 3),
+        "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256]),
+        "num_decoder_layers": trial.suggest_int("num_decoder_layers", 1, 3),
+        "decoder_output_dim": trial.suggest_categorical("decoder_output_dim", [8, 16, 32]),
+        "temporal_width_past": 0,
+        "temporal_width_future": 0,
+        "use_layer_norm": trial.suggest_categorical("use_layer_norm", [True, False]),
+        "use_reversible_instance_norm": True,
+        "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
+        "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
+        "loss_fn": torch.nn.MSELoss(),
+        "optimizer_kwargs": {"lr": lr},
+        "pl_trainer_kwargs": pl_trainer_kwargs,
+    }
+    
+    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, TiDEModel, True, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
