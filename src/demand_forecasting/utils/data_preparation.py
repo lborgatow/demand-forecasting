@@ -1,10 +1,13 @@
 from typing import Dict, Union
+import warnings
 
 import polars as pl
 import numpy as np
 from statsmodels.tsa.stattools import adfuller
 
 from demand_forecasting.utils.global_data import GlobalData
+
+warnings.filterwarnings(action="ignore")
 
 
 def check_stationarity(data: np.ndarray) -> bool:
