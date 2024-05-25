@@ -27,6 +27,7 @@ optuna = "3.6.1"
 prophet = "1.1.5"
 xgboost = "2.0.3"
 pytimetk = "0.4.0"
+humanfriendly = "10.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "8.23.0"

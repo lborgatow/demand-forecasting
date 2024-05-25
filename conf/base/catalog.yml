@@ -11,3 +11,8 @@ processed_data:
     type: polars.LazyPolarsDataset
     file_format: parquet
     filepath: data/03_primary/processed_data.pq
+
+models_results:
+    type: polars.LazyPolarsDataset
+    file_format: parquet
+    filepath: data/08_reporting/models_results.pq
