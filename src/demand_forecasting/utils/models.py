@@ -374,7 +374,7 @@ def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Unio
     X_train = train_df[train_idx].select(train_df.columns[1:])
     y_train = train_df[train_idx].select(train_df.columns[0])
     X_test = train_df[test_idx].select(train_df.columns[1:])
-    y_test = train_df[test_idx].select(train_df.columns[0])
+    y_test = train_df[test_idx].select(train_df.columns[0]).to_numpy().ravel()
     
     X_train = X_train[:-test_size]
     X_val = X_train[-test_size:]

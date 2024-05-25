@@ -6,7 +6,7 @@ import polars as pl
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 
 from .global_data import GlobalData
-from .models import get_results_cv_sma, create_features_pytimetk
+from .models import get_results_cv_sma
 from .models_validation import get_optuna_study, get_best_trial_results, get_results_df
 
 
