@@ -1,8 +1,11 @@
 from typing import Dict, List, Tuple, Union, Any, Type
 from functools import partial
+import logging
+import warnings
 
 import polars as pl
 import numpy as np
+import optuna
 from sktime.forecasting.model_selection import ExpandingWindowSplitter as EWS
 from sktime.forecasting.exp_smoothing import ExponentialSmoothing
 from sktime.forecasting.arima import ARIMA
@@ -18,6 +21,13 @@ import torch
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
 from .models_validation import get_optuna_metrics
+
+logging.getLogger("cmdstanpy").disabled = True
+logging.getLogger("prophet").setLevel(logging.CRITICAL)
+logging.getLogger("darts").setLevel(logging.CRITICAL)
+logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
+optuna.logging.set_verbosity(optuna.logging.CRITICAL)
+warnings.filterwarnings(action="ignore")
 
 
 def repeat_val(val: float, size: int) -> np.ndarray:
@@ -149,9 +159,8 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
 # ======================================================= Sktime ======================================================
 
 def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
-                  data_separators_dict: Dict[str, Union[List[int], Type[EWS]]],
-                  model: Any, model_params: Dict[str, Any], 
-                  train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+                  data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], model: Any, 
+                  model_params: Dict[str, Any], train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
     """Get performance metrics for Sktime library models using cross-validation.
 
     Args:
@@ -289,10 +298,10 @@ def objective_prophet(trial: Any, global_data: GlobalData, preparated_data_dict:
 
     model_params = {
         "freq": "D",
-        "add_country_holidays": {"country_name": "Brazil"},
+        # "add_country_holidays": {"country_name": "Brazil"},
         "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
         "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
-        "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
+        # "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
         "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95)
     }
     if min(data_array) <= 0.0:
@@ -320,13 +329,15 @@ def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[
         future predictions.
     """
     
+    lag_step = 30
+    
     df = df.select(["ds", "y"]).sort(by="ds").to_pandas()
     future_df = df.future_frame("ds", future)
     df_dates = future_df.augment_timeseries_signature(date_column="ds")
     df_lags = df_dates.augment_lags(
         date_column="ds", 
         value_column="y", 
-        lags=[lag for lag in range(30, lags+1, 30)]
+        lags=[lag for lag in range(lag_step, lags+1, lag_step)]
     )
         
     lag_columns = [col for col in df_lags.columns if "lag" in col]
@@ -340,11 +351,11 @@ def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[
         , "ds_half"
         , "ds_quarter"
         , "ds_month"
-        # , "ds_yweek"
+        , "ds_yweek"
         , "ds_mweek"
         , "ds_wday"
         , "ds_mday"
-    ] + [f"y_lag_{lag}" for lag in range(30, lags+1, 30)] 
+    ] + [f"y_lag_{lag}" for lag in range(lag_step, lags+1, lag_step)] 
     
     final_df = pl.DataFrame(df_no_nas[df_no_nas["y"].notnull()][columns])
     future_df = pl.DataFrame(df_no_nas[df_no_nas["y"].isnull()][columns])
@@ -352,14 +363,16 @@ def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[
     return final_df, future_df
 
 
-def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]], train_df: pl.DataFrame, 
-                   model_params: Dict[str, Any], parameters: Dict[str, Any], train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]], 
+                   train_df: pl.DataFrame, lags: int, model_params: Dict[str, Any], parameters: Dict[str, Any], 
+                   train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
     """Get performance metrics for XGBoost model using cross-validation.
 
     Args:
         global_data (GlobalData): Object of the GlobalData class.
         preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
         train_df (pl.DataFrame): DataFrame with the data for XGBoost training.
+        lags (int): Lags used to create the training DataFrame.
         model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
         parameters (Dict[str, Any]): Dictionary with global parameters.
         train_idx (np.ndarray): Array with training data indices.
@@ -395,7 +408,7 @@ def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Unio
                                           original_data_idx=test_idx[0], transformation=transformation)
     preds = treat_predictions(preds=preds)
     
-    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1]], size=test_size)
+    naive = repeat_val(val=original_data["y"].to_numpy()[train_idx[-1] + lags], size=test_size)
     
     return global_data.get_metrics(y_true=test, y_pred=preds, y_naive=naive)
 
@@ -445,9 +458,9 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
     initial_window = len(train_df) - (test_size + ((folds - 1)*step_length))
     cv = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
     
-    fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, model_params, parameters)
+    fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, lags, model_params, parameters)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
-        
+
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
 # ======================================================= Darts =======================================================
