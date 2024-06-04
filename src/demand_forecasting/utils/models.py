@@ -494,8 +494,8 @@ def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[
     model_fit = model(**model_params)
     if is_dl:
         val_size = model_params.get("input_chunk_length") + model_params.get("output_chunk_length")
-        train = series[:-val_size]
-        val = series[-val_size:]
+        train = train[:-val_size]
+        val = train[-val_size:]
         model_fit.fit(train, val_series=val)
     else:
         model_fit.fit(train)
