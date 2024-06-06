@@ -219,20 +219,23 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
 
     sp = parameters.get("SEASONALITIES")
 
-    model_params = {
-        "random_state": 42,
-        "use_brute": False,
-        "sp": trial.suggest_categorical("sp", sp)
-    }
-    if min(data_array) <= 0.0:
-        model_params["trend"] = trial.suggest_categorical("trend_min<=0", ["additive", None])
-        model_params["seasonal"] = trial.suggest_categorical("seasonal_min<=0", ["additive", None])
-    else:
-        model_params["trend"] = trial.suggest_categorical("trend_min>0", ["additive", "multiplicative", None])
-        model_params["seasonal"] = trial.suggest_categorical("seasonal_min>0", ["additive", "multiplicative", None])
+    try:
+        model_params = {
+            "random_state": 42,
+            "use_brute": False,
+            "sp": trial.suggest_categorical("sp", sp)
+        }
+        if min(data_array) <= 0.0:
+            model_params["trend"] = trial.suggest_categorical("trend_min<=0", ["additive", None])
+            model_params["seasonal"] = trial.suggest_categorical("seasonal_min<=0", ["additive", None])
+        else:
+            model_params["trend"] = trial.suggest_categorical("trend_min>0", ["additive", "multiplicative", None])
+            model_params["seasonal"] = trial.suggest_categorical("seasonal_min>0", ["additive", "multiplicative", None])
 
-    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [np.inf] * len_metrics
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
@@ -257,19 +260,22 @@ def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: D
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
 
-    p = trial.suggest_int("p", 1, 4)
-    d = trial.suggest_int("d", 0, 1)
-    q = trial.suggest_int("q", 0, 4)
+    try:
+        p = trial.suggest_int("p", 1, 4)
+        d = trial.suggest_int("d", 0, 1)
+        q = trial.suggest_int("q", 0, 4)
 
-    model_params = {
-        "suppress_warnings": True,
-        "maxiter": 1,
-        "order": (p, d, q),
-        "method": trial.suggest_categorical("method", ["nm", "lbfgs", "powell"])
-    }
+        model_params = {
+            "suppress_warnings": True,
+            "maxiter": 1,
+            "order": (p, d, q),
+            "method": trial.suggest_categorical("method", ["nm", "lbfgs", "powell"])
+        }
 
-    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [np.inf] * len_metrics
     
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
@@ -294,21 +300,20 @@ def objective_prophet(trial: Any, global_data: GlobalData, preparated_data_dict:
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
 
-    sp = parameters.get("SEASONALITIES")
-
-    model_params = {
-        "freq": "D",
-        # "add_country_holidays": {"country_name": "Brazil"},
-        "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
-        "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
-        # "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
-        "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95)
-    }
-    if min(data_array) <= 0.0:
-        model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min<=0", ["additive"])
-    else:
-        model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min>0", ["additive", "multiplicative"])
-
+    try:
+        model_params = {
+            "freq": "D",
+            "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
+            "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
+            "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95)
+        }
+        if min(data_array) <= 0.0:
+            model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min<=0", ["additive"])
+        else:
+            model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min>0", ["additive", "multiplicative"])
+    except:
+        return [np.inf] * len_metrics
+    
     fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, Prophet, model_params)
     metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
         
@@ -432,35 +437,38 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
     len_metrics = len(global_data.metrics)
     seasonalities = parameters.get("SEASONALITIES")
     
-    lags = trial.suggest_categorical("lags", seasonalities)
+    try:
+        lags = trial.suggest_categorical("lags", seasonalities)
+        
+        model_params = {
+            "objective": "reg:squarederror",
+            "eval_metric": "rmsle",
+            "random_state": 42,
+            "early_stopping_rounds": 20,
+            "verbosity": 0,
+            "n_estimators": trial.suggest_int("n_estimators", 500, 700, 25),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1e-1, log=True),
+            "max_depth": trial.suggest_int("max_depth", 4, 8),
+            "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+            "subsample": trial.suggest_float("subsample", 0.2, 0.9),
+            "colsample_bytree": trial.suggest_float("colsample_bytree",0.2, 0.9),
+            "colsample_bylevel": trial.suggest_float("colsample_bylevel",0.2, 0.9),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 1.0, log=True),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True)
+        }
+        
+        train_df, _ = create_features_pytimetk(df=data, lags=lags, future=test_size)
+        
+        folds, step_length = parameters.get("CV_FOLDS"), parameters.get("CV_STEP_LENGTH")
+        fh_test = list(range(1, test_size+1))
+        initial_window = len(train_df) - (test_size + ((folds - 1)*step_length))
+        cv = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
+        
+        fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, lags, model_params, parameters)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
+    except:
+        return [np.inf] * len_metrics
     
-    model_params = {
-        "objective": "reg:squarederror",
-        "eval_metric": "rmsle",
-        "random_state": 42,
-        "early_stopping_rounds": 20,
-        "verbosity": 0,
-        "n_estimators": trial.suggest_int("n_estimators", 500, 700, 25),
-        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1e-1, log=True),
-        "max_depth": trial.suggest_int("max_depth", 4, 8),
-        "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
-        "subsample": trial.suggest_float("subsample", 0.2, 0.9),
-        "colsample_bytree": trial.suggest_float("colsample_bytree",0.2, 0.9),
-        "colsample_bylevel": trial.suggest_float("colsample_bylevel",0.2, 0.9),
-        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 1.0, log=True),
-        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True)
-    }
-    
-    train_df, _ = create_features_pytimetk(df=data, lags=lags, future=test_size)
-    
-    folds, step_length = parameters.get("CV_FOLDS"), parameters.get("CV_STEP_LENGTH")
-    fh_test = list(range(1, test_size+1))
-    initial_window = len(train_df) - (test_size + ((folds - 1)*step_length))
-    cv = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
-    
-    fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, lags, model_params, parameters)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
-
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
 # ======================================================= Darts =======================================================
@@ -542,22 +550,25 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
     sm_add = SeasonalityMode.ADDITIVE
     sm_mult = SeasonalityMode.MULTIPLICATIVE
 
-    model_params = {
-        "theta": trial.suggest_int("theta", 0, 4),
-        "seasonality_period": trial.suggest_categorical("seasonality_period", sp),
-        "trend_mode": trial.suggest_categorical("trend_mode", [tm_lin, tm_exp])
+    try:
+        model_params = {
+            "theta": trial.suggest_int("theta", 0, 4),
+            "seasonality_period": trial.suggest_categorical("seasonality_period", sp),
+            "trend_mode": trial.suggest_categorical("trend_mode", [tm_lin, tm_exp])
 
-    }
-    if min(data_array) <= 0.0:
-        model_params["model_mode"] = trial.suggest_categorical("model_mode_min<=0", [mm_add])
-        model_params["season_mode"] = trial.suggest_categorical("season_mode_min<=0", [sm_none, sm_add])
-    else:
-        model_params["model_mode"] = trial.suggest_categorical("model_mode_min>0", [mm_add, mm_mult])
-        model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
+        }
+        if min(data_array) <= 0.0:
+            model_params["model_mode"] = trial.suggest_categorical("model_mode_min<=0", [mm_add])
+            model_params["season_mode"] = trial.suggest_categorical("season_mode_min<=0", [sm_none, sm_add])
+        else:
+            model_params["model_mode"] = trial.suggest_categorical("model_mode_min>0", [mm_add, mm_mult])
+            model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
 
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, False, model_params, parameters)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
-        
+        fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, False, model_params, parameters)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [np.inf] * len_metrics
+            
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
 # ================================================== N-HiTS (Darts) ===================================================
@@ -591,26 +602,29 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
         "enable_model_summary": False
     }
     
-    lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
-    
-    model_params = {
-        "random_state": 42,
-        "n_epochs": trial.suggest_int("n_epochs", 20, 50),
-        "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
-        "output_chunk_length": parameters.get("TEST_SIZE"),
-        "num_stacks": trial.suggest_int("num_stacks", 1, 3),
-        "num_blocks": trial.suggest_int("num_blocks", 1, 3),
-        "num_layers": trial.suggest_int("num_layers", 1, 3),
-        "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
-        "layer_widths": trial.suggest_categorical("layer_widths", [64, 128, 256]),
-        "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
-        "loss_fn": torch.nn.MSELoss(),
-        "optimizer_kwargs": {"lr": lr},
-        "pl_trainer_kwargs": pl_trainer_kwargs
-    }
-    
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, True, model_params, parameters)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    try:
+        lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
+        
+        model_params = {
+            "random_state": 42,
+            "n_epochs": trial.suggest_int("n_epochs", 20, 50),
+            "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
+            "output_chunk_length": parameters.get("TEST_SIZE"),
+            "num_stacks": trial.suggest_int("num_stacks", 1, 3),
+            "num_blocks": trial.suggest_int("num_blocks", 1, 3),
+            "num_layers": trial.suggest_int("num_layers", 1, 3),
+            "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
+            "layer_widths": trial.suggest_categorical("layer_widths", [64, 128, 256]),
+            "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
+            "loss_fn": torch.nn.MSELoss(),
+            "optimizer_kwargs": {"lr": lr},
+            "pl_trainer_kwargs": pl_trainer_kwargs
+        }
+        
+        fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, True, model_params, parameters)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [np.inf] * len_metrics
         
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
 
@@ -645,29 +659,32 @@ def objective_tide(trial: Any, global_data: GlobalData, preparated_data_dict: Di
         "enable_model_summary": False
     }
     
-    lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
-    
-    model_params = {
-        "random_state": 42,
-        "n_epochs": trial.suggest_int("n_epochs", 20, 50),
-        "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
-        "output_chunk_length": parameters.get("TEST_SIZE"),
-        "num_encoder_layers": trial.suggest_int("num_encoder_layers", 1, 3),
-        "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256]),
-        "num_decoder_layers": trial.suggest_int("num_decoder_layers", 1, 3),
-        "decoder_output_dim": trial.suggest_categorical("decoder_output_dim", [8, 16, 32]),
-        "temporal_width_past": 0,
-        "temporal_width_future": 0,
-        "use_layer_norm": trial.suggest_categorical("use_layer_norm", [True, False]),
-        "use_reversible_instance_norm": True,
-        "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
-        "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
-        "loss_fn": torch.nn.MSELoss(),
-        "optimizer_kwargs": {"lr": lr},
-        "pl_trainer_kwargs": pl_trainer_kwargs,
-    }
-    
-    fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, TiDEModel, True, model_params, parameters)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    try:
+        lr = trial.suggest_float("lr", 1e-3, 1e-1, log=True)
         
+        model_params = {
+            "random_state": 42,
+            "n_epochs": trial.suggest_int("n_epochs", 20, 50),
+            "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
+            "output_chunk_length": parameters.get("TEST_SIZE"),
+            "num_encoder_layers": trial.suggest_int("num_encoder_layers", 1, 3),
+            "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256]),
+            "num_decoder_layers": trial.suggest_int("num_decoder_layers", 1, 3),
+            "decoder_output_dim": trial.suggest_categorical("decoder_output_dim", [8, 16, 32]),
+            "temporal_width_past": 0,
+            "temporal_width_future": 0,
+            "use_layer_norm": trial.suggest_categorical("use_layer_norm", [True, False]),
+            "use_reversible_instance_norm": True,
+            "dropout": trial.suggest_float("dropout", 0.0, 0.2, step=0.01),
+            "batch_size": trial.suggest_categorical("batch_size", [128, 256, 512]),
+            "loss_fn": torch.nn.MSELoss(),
+            "optimizer_kwargs": {"lr": lr},
+            "pl_trainer_kwargs": pl_trainer_kwargs,
+        }
+        
+        fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, TiDEModel, True, model_params, parameters)
+        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [np.inf] * len_metrics
+    
     return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
