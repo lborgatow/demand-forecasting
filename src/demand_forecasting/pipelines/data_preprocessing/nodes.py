@@ -1,4 +1,5 @@
 from typing import Dict, List, Tuple, Any
+import random
 
 import polars as pl
 
@@ -17,8 +18,11 @@ def preprocess_data(data: pl.DataFrame) -> Tuple[pl.DataFrame, List[str]]:
         list with unique ids.
     """
 
+    random.seed(42)
+    
     processed_data = process_data(data=data)
     unique_ids = get_unique_ids(data=processed_data)
+    unique_ids = random.sample(unique_ids, 100)
 
     return processed_data, unique_ids
 
