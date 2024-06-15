@@ -76,6 +76,10 @@ class Metrics:
         model_rmsle = self.rmsle(y_true, y_pred)
         naive_rmsle = self.rmsle(y_true, y_naive)
         
+        if (naive_smape == 0.0) and (naive_rmsle == 0.0):
+            naive_smape += 1e-10
+            naive_rmsle += 1e-10
+        
         return ((model_smape / naive_smape) + (model_rmsle / naive_rmsle)) / 2
 
 
