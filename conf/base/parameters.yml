@@ -1,20 +1,20 @@
-# Métricas de avaliação de desempenho dos modelos
-METRICS: ["smape", "rmsle", "owa"]
+DATABASE: "${database:}"  # Base de dados (STORE_ITEM ou FOOD) 
+FREQUENCY: "${frequency:}"  # Frequência dos dados (DAILY[diária] ou WEEKLY[semanal]) 
 
-# Métrica principal para avaliar o desempenho dos modelos
-KEY_METRIC: "owa"
+METRICS: ["smape", "rmsle", "owa"]  # Métricas de avaliação de desempenho dos modelos
+KEY_METRIC: "owa"  # Métrica principal para avaliar o desempenho dos modelos
 
-# Quantidade de dados para teste
-TEST_SIZE: 30
+CV_FOLDS: 4  # Quantidade de folds para validação cruzada
+OPTUNA_TRIALS: 30  # Número de experimentos do Optuna
 
-# Quantidade de folds para validação cruzada
-CV_FOLDS: 4
+DAILY:  # Parâmetros para a frequência de dados diária
+    FREQ: "D"  # Frequência dos dados
+    TEST_SIZE: 30  # Quantidade de dados para teste
+    CV_STEP_LENGTH: 30  # Comprimento do passo para gerar os folds da validação cruzada
+    SEASONALITIES: [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]  # Possibilidades de sazonalidades mensais para as séries temporais
 
-# Comprimento do passo para gerar os folds da validação cruzada
-CV_STEP_LENGTH: 30
-
-# Possibilidades de sazonalidades mensais para as séries temporais
-SEASONALITIES: [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]
-
-# Número de experimentos do Optuna
-OPTUNA_TRIALS: 30
+WEEKLY: # Parâmetros para a frequência de dados semanal
+    FREQ: "W"  # Frequência dos dados
+    TEST_SIZE: 4  # Quantidade de dados para teste
+    CV_STEP_LENGTH: 4  # Comprimento do passo para gerar os folds da validação cruzada
+    SEASONALITIES: [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52]  # Possibilidades de sazonalidades para as séries temporais

@@ -2,6 +2,8 @@
 from the Kedro defaults. For further information, including these default values, see
 https://docs.kedro.org/en/stable/kedro_project_setup/settings.html."""
 
+import os
+
 # Filter warnings.
 import warnings
 warnings.filterwarnings(action="ignore")
@@ -39,6 +41,11 @@ CONFIG_LOADER_ARGS = {
 #           "spark" : ["spark*/"],
 #           "parameters": ["parameters*", "parameters*/**", "**/parameters*"],
 #       }
+      "custom_resolvers": {
+            "database": lambda: os.getenv("DATABASE", "STORE_ITEM").upper(),
+            "frequency": lambda: os.getenv("FREQUENCY", "DAILY").upper(),
+      },
+      
 }
 
 # Class that manages Kedro's library components.

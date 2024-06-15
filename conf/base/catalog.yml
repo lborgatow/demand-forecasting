@@ -5,14 +5,14 @@
 
 raw_data:
     type: polars.CSVDataset
-    filepath: data/01_raw/store_item_demand.csv
+    filepath: "data/01_raw/${database:}/${database:}_DEMAND.csv"
 
 processed_data:
     type: polars.LazyPolarsDataset
     file_format: parquet
-    filepath: data/03_primary/processed_data.pq
+    filepath: "data/03_primary/PROCESSED_${database:}_${frequency:}.pq"
 
 models_results:
     type: polars.LazyPolarsDataset
     file_format: parquet
-    filepath: data/08_reporting/models_results.pq
+    filepath: "data/08_reporting/RESULTS_${database:}_${frequency:}.pq"
