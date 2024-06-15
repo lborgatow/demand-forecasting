@@ -1,0 +1,138 @@
+(demand-forecasting-py3.10) PS C:\[...]\demand-forecasting> $env:DATABASE="STORE_ITEM"; $env:FREQUENCY="WEEKLY"; kedro run
+[06/13/24 09:50:42] INFO     Kedro project demand-forecasting                                                                                          session.py:324
+[06/13/24 09:50:56] INFO     Using synchronous mode for loading and saving data. Use the --async flag for potential performance gains.        sequential_runner.py:64
+                             https://docs.kedro.org/en/stable/nodes_and_pipelines/run_a_pipeline.html#load-and-save-asynchronously
+                    INFO     Loading data from raw_data (CSVDataset)...                                                                           data_catalog.py:483
+                    INFO     Loading data from parameters (MemoryDataset)...                                                                      data_catalog.py:483
+                    INFO     Running node: preprocess_data_node: preprocess_data([raw_data;parameters]) -> [processed_data;unique_ids]                    node.py:361
+                    INFO     Saving data to processed_data (LazyPolarsDataset)...                                                                 data_catalog.py:525
+                    INFO     Saving data to unique_ids (MemoryDataset)...                                                                         data_catalog.py:525
+                    INFO     Completed 1 out of 3 tasks                                                                                       sequential_runner.py:90
+                    INFO     Loading data from processed_data (LazyPolarsDataset)...                                                              data_catalog.py:483
+                    INFO     Loading data from parameters (MemoryDataset)...                                                                      data_catalog.py:483
+                    INFO     Running node: define_global_data_node: define_global_data([processed_data;parameters]) -> [global_data]                      node.py:361
+                    INFO     Saving data to global_data (MemoryDataset)...                                                                        data_catalog.py:525
+                    INFO     Completed 2 out of 3 tasks                                                                                       sequential_runner.py:90
+                    INFO     Loading data from global_data (MemoryDataset)...                                                                     data_catalog.py:483
+                    INFO     Loading data from unique_ids (MemoryDataset)...                                                                      data_catalog.py:483
+                    INFO     Loading data from parameters (MemoryDataset)...                                                                      data_catalog.py:483
+                    INFO     Running node: preprocess_data_node: run_parallel_predictions([global_data;unique_ids;parameters]) -> [models_results]        node.py:361
+
+####################################################################################################
+                                              INICIADO
+####################################################################################################
+
+Base de dados: STORE_ITEM
+Frequência: WEEKLY
+UIDs encontrados: 100
+
+STORE: 10; ITEM: 47; UID: 10_47 - CONCLUIDO; 99 restante(s)
+STORE: 07; ITEM: 47; UID: 07_47 - CONCLUIDO; 98 restante(s)
+STORE: 03; ITEM: 41; UID: 03_41 - CONCLUIDO; 97 restante(s)
+STORE: 03; ITEM: 26; UID: 03_26 - CONCLUIDO; 96 restante(s)
+STORE: 08; ITEM: 28; UID: 08_28 - CONCLUIDO; 95 restante(s)
+STORE: 08; ITEM: 30; UID: 08_30 - CONCLUIDO; 94 restante(s)
+STORE: 02; ITEM: 08; UID: 02_08 - CONCLUIDO; 93 restante(s)
+STORE: 02; ITEM: 22; UID: 02_22 - CONCLUIDO; 92 restante(s)
+STORE: 01; ITEM: 13; UID: 01_13 - CONCLUIDO; 91 restante(s)
+STORE: 07; ITEM: 28; UID: 07_28 - CONCLUIDO; 90 restante(s)
+STORE: 03; ITEM: 15; UID: 03_15 - CONCLUIDO; 89 restante(s)
+STORE: 02; ITEM: 03; UID: 02_03 - CONCLUIDO; 88 restante(s)
+STORE: 01; ITEM: 16; UID: 01_16 - CONCLUIDO; 87 restante(s)
+STORE: 10; ITEM: 07; UID: 10_07 - CONCLUIDO; 86 restante(s)
+STORE: 06; ITEM: 30; UID: 06_30 - CONCLUIDO; 85 restante(s)
+STORE: 06; ITEM: 09; UID: 06_09 - CONCLUIDO; 84 restante(s)
+STORE: 01; ITEM: 45; UID: 01_45 - CONCLUIDO; 83 restante(s)
+STORE: 01; ITEM: 17; UID: 01_17 - CONCLUIDO; 82 restante(s)
+STORE: 07; ITEM: 09; UID: 07_09 - CONCLUIDO; 81 restante(s)
+STORE: 07; ITEM: 03; UID: 07_03 - CONCLUIDO; 80 restante(s)
+STORE: 05; ITEM: 17; UID: 05_17 - CONCLUIDO; 79 restante(s)
+STORE: 03; ITEM: 12; UID: 03_12 - CONCLUIDO; 78 restante(s)
+STORE: 01; ITEM: 48; UID: 01_48 - CONCLUIDO; 77 restante(s)
+STORE: 03; ITEM: 20; UID: 03_20 - CONCLUIDO; 76 restante(s)
+STORE: 03; ITEM: 02; UID: 03_02 - CONCLUIDO; 75 restante(s)
+STORE: 01; ITEM: 14; UID: 01_14 - CONCLUIDO; 74 restante(s)
+STORE: 10; ITEM: 37; UID: 10_37 - CONCLUIDO; 73 restante(s)
+STORE: 07; ITEM: 33; UID: 07_33 - CONCLUIDO; 72 restante(s)
+STORE: 05; ITEM: 15; UID: 05_15 - CONCLUIDO; 71 restante(s)
+STORE: 08; ITEM: 10; UID: 08_10 - CONCLUIDO; 70 restante(s)
+STORE: 03; ITEM: 13; UID: 03_13 - CONCLUIDO; 69 restante(s)
+STORE: 08; ITEM: 17; UID: 08_17 - CONCLUIDO; 68 restante(s)
+STORE: 05; ITEM: 30; UID: 05_30 - CONCLUIDO; 67 restante(s)
+STORE: 07; ITEM: 02; UID: 07_02 - CONCLUIDO; 66 restante(s)
+STORE: 06; ITEM: 38; UID: 06_38 - CONCLUIDO; 65 restante(s)
+STORE: 03; ITEM: 43; UID: 03_43 - CONCLUIDO; 64 restante(s)
+STORE: 09; ITEM: 46; UID: 09_46 - CONCLUIDO; 63 restante(s)
+STORE: 01; ITEM: 04; UID: 01_04 - CONCLUIDO; 62 restante(s)
+STORE: 09; ITEM: 15; UID: 09_15 - CONCLUIDO; 61 restante(s)
+STORE: 02; ITEM: 32; UID: 02_32 - CONCLUIDO; 60 restante(s)
+STORE: 08; ITEM: 39; UID: 08_39 - CONCLUIDO; 59 restante(s)
+STORE: 08; ITEM: 08; UID: 08_08 - CONCLUIDO; 58 restante(s)
+STORE: 04; ITEM: 25; UID: 04_25 - CONCLUIDO; 57 restante(s)
+STORE: 09; ITEM: 13; UID: 09_13 - CONCLUIDO; 56 restante(s)
+STORE: 10; ITEM: 34; UID: 10_34 - CONCLUIDO; 55 restante(s)
+STORE: 10; ITEM: 15; UID: 10_15 - CONCLUIDO; 54 restante(s)
+STORE: 02; ITEM: 30; UID: 02_30 - CONCLUIDO; 53 restante(s)
+STORE: 03; ITEM: 11; UID: 03_11 - CONCLUIDO; 52 restante(s)
+STORE: 04; ITEM: 23; UID: 04_23 - CONCLUIDO; 51 restante(s)
+STORE: 08; ITEM: 41; UID: 08_41 - CONCLUIDO; 50 restante(s)
+STORE: 10; ITEM: 31; UID: 10_31 - CONCLUIDO; 49 restante(s)
+STORE: 10; ITEM: 41; UID: 10_41 - CONCLUIDO; 48 restante(s)
+STORE: 04; ITEM: 34; UID: 04_34 - CONCLUIDO; 47 restante(s)
+STORE: 01; ITEM: 50; UID: 01_50 - CONCLUIDO; 46 restante(s)
+STORE: 04; ITEM: 45; UID: 04_45 - CONCLUIDO; 45 restante(s)
+STORE: 04; ITEM: 27; UID: 04_27 - CONCLUIDO; 44 restante(s)
+STORE: 07; ITEM: 10; UID: 07_10 - CONCLUIDO; 43 restante(s)
+STORE: 09; ITEM: 34; UID: 09_34 - CONCLUIDO; 42 restante(s)
+STORE: 03; ITEM: 36; UID: 03_36 - CONCLUIDO; 41 restante(s)
+STORE: 09; ITEM: 14; UID: 09_14 - CONCLUIDO; 40 restante(s)
+STORE: 01; ITEM: 23; UID: 01_23 - CONCLUIDO; 39 restante(s)
+STORE: 08; ITEM: 24; UID: 08_24 - CONCLUIDO; 38 restante(s)
+STORE: 01; ITEM: 41; UID: 01_41 - CONCLUIDO; 37 restante(s)
+STORE: 04; ITEM: 44; UID: 04_44 - CONCLUIDO; 36 restante(s)
+STORE: 06; ITEM: 25; UID: 06_25 - CONCLUIDO; 35 restante(s)
+STORE: 06; ITEM: 33; UID: 06_33 - CONCLUIDO; 34 restante(s)
+STORE: 02; ITEM: 14; UID: 02_14 - CONCLUIDO; 33 restante(s)
+STORE: 05; ITEM: 36; UID: 05_36 - CONCLUIDO; 32 restante(s)
+STORE: 04; ITEM: 01; UID: 04_01 - CONCLUIDO; 31 restante(s)
+STORE: 09; ITEM: 25; UID: 09_25 - CONCLUIDO; 30 restante(s)
+STORE: 07; ITEM: 22; UID: 07_22 - CONCLUIDO; 29 restante(s)
+STORE: 04; ITEM: 36; UID: 04_36 - CONCLUIDO; 28 restante(s)
+STORE: 07; ITEM: 17; UID: 07_17 - CONCLUIDO; 27 restante(s)
+STORE: 06; ITEM: 46; UID: 06_46 - CONCLUIDO; 26 restante(s)
+STORE: 02; ITEM: 49; UID: 02_49 - CONCLUIDO; 25 restante(s)
+STORE: 08; ITEM: 11; UID: 08_11 - CONCLUIDO; 24 restante(s)
+STORE: 01; ITEM: 24; UID: 01_24 - CONCLUIDO; 23 restante(s)
+STORE: 01; ITEM: 36; UID: 01_36 - CONCLUIDO; 22 restante(s)
+STORE: 07; ITEM: 39; UID: 07_39 - CONCLUIDO; 21 restante(s)
+STORE: 03; ITEM: 17; UID: 03_17 - CONCLUIDO; 20 restante(s)
+STORE: 03; ITEM: 49; UID: 03_49 - CONCLUIDO; 19 restante(s)
+STORE: 08; ITEM: 46; UID: 08_46 - CONCLUIDO; 18 restante(s)
+STORE: 09; ITEM: 45; UID: 09_45 - CONCLUIDO; 17 restante(s)
+STORE: 02; ITEM: 02; UID: 02_02 - CONCLUIDO; 16 restante(s)
+STORE: 10; ITEM: 29; UID: 10_29 - CONCLUIDO; 15 restante(s)
+STORE: 09; ITEM: 48; UID: 09_48 - CONCLUIDO; 14 restante(s)
+STORE: 05; ITEM: 33; UID: 05_33 - CONCLUIDO; 13 restante(s)
+STORE: 10; ITEM: 05; UID: 10_05 - CONCLUIDO; 12 restante(s)
+STORE: 04; ITEM: 37; UID: 04_37 - CONCLUIDO; 11 restante(s)
+STORE: 02; ITEM: 34; UID: 02_34 - CONCLUIDO; 10 restante(s)
+STORE: 07; ITEM: 26; UID: 07_26 - CONCLUIDO; 9 restante(s)
+STORE: 04; ITEM: 40; UID: 04_40 - CONCLUIDO; 8 restante(s)
+STORE: 03; ITEM: 08; UID: 03_08 - CONCLUIDO; 7 restante(s)
+STORE: 04; ITEM: 32; UID: 04_32 - CONCLUIDO; 6 restante(s)
+STORE: 07; ITEM: 44; UID: 07_44 - CONCLUIDO; 5 restante(s)
+STORE: 07; ITEM: 32; UID: 07_32 - CONCLUIDO; 4 restante(s)
+STORE: 03; ITEM: 37; UID: 03_37 - CONCLUIDO; 3 restante(s)
+STORE: 07; ITEM: 50; UID: 07_50 - CONCLUIDO; 2 restante(s)
+STORE: 01; ITEM: 37; UID: 01_37 - CONCLUIDO; 1 restante(s)
+STORE: 10; ITEM: 21; UID: 10_21 - CONCLUIDO; 0 restante(s)
+
+Tempo total: 33 minutes and 9.42 seconds
+
+####################################################################################################
+                                             FINALIZADO
+####################################################################################################
+
+[06/13/24 10:24:06] INFO     Saving data to models_results (LazyPolarsDataset)...                                                                 data_catalog.py:525
+                    INFO     Completed 3 out of 3 tasks                                                                                       sequential_runner.py:90
+                    INFO     Pipeline execution completed successfully.                                                                                 runner.py:119
