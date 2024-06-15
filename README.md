@@ -1,98 +1,60 @@
-# Demand Forecasting
+# :chart_with_upwards_trend: Demand Forecasting :chart_with_upwards_trend:
 
-## Overview
+## :bulb: Referências e Requerimentos
 
-This is your new Kedro project, which was generated using `kedro 0.19.4`.
+- Obtive os datasets através do Kaggle: [Store Item Demand](https://www.kaggle.com/competitions/demand-forecasting-kernels-only) e [Food Demand](https://www.kaggle.com/datasets/arashnic/food-demand);
 
-Take a look at the [Kedro documentation](https://docs.kedro.org) to get started.
+- Utilizei a linguagem [Python](https://docs.python.org/3/), o [Kedro](https://kedro.org/) para gerenciar o projeto e o [Poetry](https://python-poetry.org/) para gerenciar o ambiente (dependências).
 
-## Rules and guidelines
+## :pushpin: Introdução
 
-In order to get the best out of the template:
+A previsão de demanda é uma atividade essencial para a gestão eficaz da cadeia de suprimentos. Através da previsão da demanda futura, as empresas podem otimizar o gerenciamento de estoques, planejar a produção e distribuição de produtos, e tomar decisões estratégicas mais acertadas. Nos últimos anos, a aplicação de Inteligência Artificial (IA), e em particular, de modelos de séries temporais, tem revolucionado a forma como as organizações abordam a previsão de demanda. Sistemas de aprendizado de máquina e algoritmos avançados permitem lidar com grandes volumes de dados, proporcionando insights valiosos para aprimorar as estratégias de suprimento. Este estudo tem como objetivo avaliar o desempenho dos modelos de séries temporais na previsão de demanda na gestão da cadeia de suprimentos. Para isso, será realizada uma comparação entre diferentes modelos, incluindo modelos tradicionais, como os Modelos Exponenciais, os modelos ARIMA e a Média Móvel Simples, e modelos mais avançados, como o Prophet, o XGBoost, o N-HiTS, o FourTheta e o TiDE. Além deles, também será utilizado um modelo para demandas intermitentes, o Croston. Os modelos serão treinados utilizando o Optuna para otimização dos hiperparâmetros e avaliados utilizando técnicas de validação cruzada, como a Janela de Expansão, e métricas de desempenho adequadas para séries temporais, como a Média Ponderada Geral (OWA) baseada no Erro Percentual Absoluto Médio Simétrico (sMAPE) e no Erro Logarítmico Quadrático Médio (RMSLE). Os resultados desse estudo fornecerão insights valiosos para as organizações na escolha dos modelos de previsão de demanda mais adequados para suas necessidades específicas.
 
-* Don't remove any lines from the `.gitignore` file we provide
-* Make sure your results can be reproduced by following a [data engineering convention](https://docs.kedro.org/en/stable/faq/faq.html#what-is-data-engineering-convention)
-* Don't commit data to your repository
-* Don't commit any credentials or your local configuration to your repository. Keep all your credentials and local configuration in `conf/local/`
+## ⚙️ Como executar
 
-## How to install dependencies
-
-Declare any dependencies in `requirements.txt` for `pip` installation.
-
-To install them, run:
-
+### 1. No terminal/cmd, deve-se clonar o repositório:
 ```
-pip install -r requirements.txt
+git clone https://github.com/lborgatow/demand-forecasting.git
+```
+ou baixar o projeto diretamente do [GitHub](https://github.com/lborgatow/demand-forecasting);
+
+### 2. Configurar o Poetry para gerar o ".venv" na pasta do projeto:
+```
+poetry config virtualenvs.in-project true
 ```
 
-## How to run your Kedro pipeline
-
-You can run your Kedro project with:
-
+### 3. Instalar as dependências usando o Poetry:
 ```
-kedro run
+poetry install --no-root
 ```
 
-## How to test your Kedro project
-
-Have a look at the files `src/tests/test_run.py` and `src/tests/pipelines/data_science/test_pipeline.py` for instructions on how to write your tests. Run the tests as follows:
-
+### 4. Executar
+#### 4.1. Projeto no Kedro
 ```
-pytest
+poetry shell
 ```
 
-To configure the coverage threshold, look at the `.coveragerc` file.
-
-## Project dependencies
-
-To see and update the dependency requirements for your project use `requirements.txt`. You can install the project requirements with `pip install -r requirements.txt`.
-
-[Further information about project dependencies](https://docs.kedro.org/en/stable/kedro_project_setup/dependencies.html#project-specific-dependencies)
-
-## How to work with Kedro and notebooks
-
-> Note: Using `kedro jupyter` or `kedro ipython` to run your notebook provides these variables in scope: `catalog`, `context`, `pipelines` and `session`.
->
-> Jupyter, JupyterLab, and IPython are already included in the project requirements by default, so once you have run `pip install -r requirements.txt` you will not need to take any extra steps before you use them.
-
-### Jupyter
-To use Jupyter notebooks in your Kedro project, you need to install Jupyter:
-
+##### 4.1.1. Base 1 [Store Item Demand]: Diária
 ```
-pip install jupyter
+$env:DATABASE="STORE_ITEM"; $env:FREQUENCY="DAILY"; kedro run      (Windows)
+export DATABASE="STORE_ITEM"; export FREQUENCY="DAILY"; kedro run  (Linux)
 ```
 
-After installing Jupyter, you can start a local notebook server:
-
+##### 4.1.2. Base 1 [Store Item Demand]: Semanal
 ```
-kedro jupyter notebook
-```
-
-### JupyterLab
-To use JupyterLab, you need to install it:
-
-```
-pip install jupyterlab
+$env:DATABASE="STORE_ITEM"; $env:FREQUENCY="WEEKLY"; kedro run      (Windows)
+export DATABASE="STORE_ITEM"; export FREQUENCY="WEEKLY"; kedro run  (Linux)
 ```
 
-You can also start JupyterLab:
-
+##### 4.1.3. Base 2 [Food Demand]: Semanal
 ```
-kedro jupyter lab
-```
-
-### IPython
-And if you want to run an IPython session:
-
-```
-kedro ipython
+$env:DATABASE="FOOD"; $env:FREQUENCY="WEEKLY"; kedro run      (Windows)
+export DATABASE="FOOD"; export FREQUENCY="WEEKLY"; kedro run  (Linux)
 ```
 
-### How to ignore notebook output cells in `git`
-To automatically strip out all output cell contents before committing to `git`, you can use tools like [`nbstripout`](https://github.com/kynan/nbstripout). For example, you can add a hook in `.git/config` with `nbstripout --install`. This will run `nbstripout` before anything is committed to `git`.
+#### 4.2. Notebooks 
+```
+Adicionar o ".venv" como kernel do notebook desejado e, em seguida, executá-lo.
+```
 
-> *Note:* Your output cells will be retained locally.
 
-## Package your Kedro project
-
-[Further information about building project documentation and packaging your project](https://docs.kedro.org/en/stable/tutorial/package_a_project.html)
