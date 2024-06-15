@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union, Any, Type
+from typing import Dict, List, Tuple, Union, Any, Type, Callable
 from functools import partial
 import logging
 import warnings
@@ -14,13 +14,14 @@ from xgboost import XGBRegressor
 import pytimetk as tk
 from darts.timeseries import TimeSeries
 from darts.utils.utils import ModelMode, TrendMode, SeasonalityMode
-from darts.models import FourTheta, NHiTSModel, TiDEModel
+from darts.models import FourTheta, NHiTSModel, TiDEModel, Croston
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch
 
 from .global_data import GlobalData
 from .data_preparation import reverse_transformation
 from .models_validation import get_optuna_metrics
+from .decorators import time_limit
 
 logging.getLogger("cmdstanpy").disabled = True
 logging.getLogger("prophet").setLevel(logging.CRITICAL)
@@ -100,8 +101,10 @@ def fit_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, Union[st
         List[float]: List with the results of the calculated metrics.
     """ 
     
+    frequency = parameters.get("FREQUENCY")
+    
     data = preparated_data_dict.get("transformed_data")["y"].to_numpy()
-    test_size = parameters.get("TEST_SIZE")
+    test_size = parameters[frequency].get("TEST_SIZE")
 
     train = data[train_idx]
     test = data[test_idx]
@@ -135,21 +138,30 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
         a list of performance metrics for that window.
     """
 
+    frequency = parameters.get("FREQUENCY")
+    
     data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
-    windows = parameters.get("SEASONALITIES") 
+    windows = parameters[frequency].get("SEASONALITIES") 
     
     metrics, key_metric = parameters.get("METRICS"), parameters.get("KEY_METRIC")
     metrics_means = {}
 
-    for window in windows:
-        metrics_per_window = np.array([fit_cv_sma(global_data, preparated_data_dict, parameters, \
-            window, train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)])
-        aux = np.mean(metrics_per_window, axis=0)
-        metrics_means[window] = {metrics[i]: aux[i] for i in range(len(metrics))}
+    fit_cv_partial = partial(fit_cv_sma, global_data, preparated_data_dict, parameters)
+    try:
+        for window in windows:
+            metrics_per_window = np.array([time_limit(seconds=5)(fit_cv_partial)(window, train_idx, test_idx) \
+                for train_idx, test_idx in cv.split(data_array)])
+            aux = np.mean(metrics_per_window, axis=0)
+            metrics_means[window] = {metrics[i]: aux[i] for i in range(len(metrics))}
 
-    best_window = min(metrics_means, key=lambda w: metrics_means[w][key_metric])
-    best_metrics = list(metrics_means[best_window].values())
+        best_window = min(metrics_means, key=lambda w: metrics_means[w][key_metric])
+        best_metrics = list(metrics_means[best_window].values())
+    except:
+        return {
+            "best_window": "error",
+            "best_metrics": [np.inf] * len(metrics)  # error
+        }
     
     return {
         "best_window": best_window,
@@ -159,8 +171,8 @@ def get_results_cv_sma(global_data: GlobalData, preparated_data_dict: Dict[str, 
 # ======================================================= Sktime ======================================================
 
 def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
-                  data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], model: Any, 
-                  model_params: Dict[str, Any], train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
+                  data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], model: Any, model_params: Dict[str, Any], 
+                  parameters: Dict[str, Any], train_idx: np.ndarray, test_idx: np.ndarray) -> List[float]:
     """Get performance metrics for Sktime library models using cross-validation.
 
     Args:
@@ -169,6 +181,7 @@ def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union
         data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
         model (Any): Model used for testing and predictions.
         model_params (Dict[str, Any]): Dictionary with the model training parameters and their respective values.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
         train_idx (np.ndarray): Array with training data indices.
         test_idx (np.ndarray): Array with test data indexes.
 
@@ -176,9 +189,12 @@ def fit_cv_sktime(global_data: GlobalData, preparated_data_dict: Dict[str, Union
         List[float]: List with the results of the calculated metrics.
     """
     
-    data = preparated_data_dict.get("transformed_data").to_pandas()
-    series = data.set_index("ds").sort_index().asfreq("D")["y"].squeeze()
+    frequency = parameters.get("FREQUENCY")
+    freq = parameters[frequency].get("FREQ")
+    
+    data = preparated_data_dict.get("transformed_data").clone().to_pandas()
     fh_test = data_separators_dict.get("fh_test")
+    series = data.set_index("ds").sort_index().asfreq(freq)["y"].squeeze()
     
     train = series.iloc[train_idx]
     test = series.iloc[test_idx].values
@@ -217,7 +233,8 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
 
-    sp = parameters.get("SEASONALITIES")
+    frequency = parameters.get("FREQUENCY")
+    sp = parameters[frequency].get("SEASONALITIES")
 
     try:
         model_params = {
@@ -232,12 +249,12 @@ def objective_expsmoothing(trial: Any, global_data: GlobalData, preparated_data_
             model_params["trend"] = trial.suggest_categorical("trend_min>0", ["additive", "multiplicative", None])
             model_params["seasonal"] = trial.suggest_categorical("seasonal_min>0", ["additive", "multiplicative", None])
 
-        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ExponentialSmoothing, model_params, parameters)
+        metrics_cv = [time_limit(seconds=50)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
         
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ============================================= ARIMA (Sktime - pmdarima) =============================================
 
@@ -272,12 +289,12 @@ def objective_arima(trial: Any, global_data: GlobalData, preparated_data_dict: D
             "method": trial.suggest_categorical("method", ["nm", "lbfgs", "powell"])
         }
 
-        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, ARIMA, model_params, parameters)
+        metrics_cv = [time_limit(seconds=20)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
     
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ================================================= Prophet (Sktime) ==================================================
 
@@ -300,41 +317,47 @@ def objective_prophet(trial: Any, global_data: GlobalData, preparated_data_dict:
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
 
+    frequency = parameters.get("FREQUENCY")
+    
     try:
         model_params = {
-            "freq": "D",
+            "freq": parameters[frequency].get("FREQ"),
             "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
             "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
-            "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95)
+            # "changepoint_range": trial.suggest_float("changepoint_range", 0.8, 0.95),
+            "uncertainty_samples": False
         }
         if min(data_array) <= 0.0:
             model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min<=0", ["additive"])
         else:
             model_params["seasonality_mode"] = trial.suggest_categorical("seasonality_mode_min>0", ["additive", "multiplicative"])
+            
+        fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, Prophet, model_params, parameters)
+        metrics_cv = [time_limit(seconds=30)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
-    
-    fit_cv_partial = partial(fit_cv_sktime, global_data, preparated_data_dict, data_separators_dict, Prophet, model_params)
-    metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        return [None] * len_metrics
         
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ================================================= XGBoost (xgboost) ==================================================
 
-def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[pl.DataFrame]:
+def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int, parameters: Dict[str, Any]) -> Tuple[pl.DataFrame]:
     """Create features from a series to perform predictions with tree models like XGBoost.
 
     Args:
         df (pl.DataFrame): Series to predict transformed into DataFrame.
         future (int): Number of future dates for prediction.
         lags (int): Lags for generating model features.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
 
     Returns:
         Tuple[pl.DataFrame]: Tuple with the DataFrame for training/testing and the DataFrame for 
         future predictions.
     """
     
-    lag_step = 30
+    frequency = parameters.get("FREQUENCY")
+    freq = parameters[frequency].get("FREQ")
+    lag_step = parameters[frequency].get("TEST_SIZE")
     
     df = df.select(["ds", "y"]).sort(by="ds").to_pandas()
     future_df = df.future_frame("ds", future)
@@ -358,9 +381,11 @@ def create_features_pytimetk(df: pl.DataFrame, future: int, lags: int) -> Tuple[
         , "ds_month"
         , "ds_yweek"
         , "ds_mweek"
-        , "ds_wday"
-        , "ds_mday"
     ] + [f"y_lag_{lag}" for lag in range(lag_step, lags+1, lag_step)] 
+    
+    if freq == "D":
+        columns += ["ds_wday", "ds_mday"]
+    
     
     final_df = pl.DataFrame(df_no_nas[df_no_nas["y"].notnull()][columns])
     future_df = pl.DataFrame(df_no_nas[df_no_nas["y"].isnull()][columns])
@@ -387,7 +412,8 @@ def fit_cv_xgboost(global_data: GlobalData, preparated_data_dict: Dict[str, Unio
         List[float]: List with the results of the calculated metrics.
     """
     
-    test_size = parameters.get("TEST_SIZE")
+    frequency = parameters.get("FREQUENCY")
+    test_size = parameters[frequency].get("TEST_SIZE")
     
     X_train = train_df[train_idx].select(train_df.columns[1:])
     y_train = train_df[train_idx].select(train_df.columns[0])
@@ -432,10 +458,12 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
         List[float]: List with the values ​​of the model's performance metrics.
     """
     
+    frequency = parameters.get("FREQUENCY")
+    
     data = preparated_data_dict.get("transformed_data")
-    test_size = parameters.get("TEST_SIZE")
+    test_size = parameters[frequency].get("TEST_SIZE")
     len_metrics = len(global_data.metrics)
-    seasonalities = parameters.get("SEASONALITIES")
+    seasonalities = parameters[frequency].get("SEASONALITIES")
     
     try:
         lags = trial.suggest_categorical("lags", seasonalities)
@@ -457,19 +485,19 @@ def objective_xgboost(trial: Any, global_data: GlobalData, preparated_data_dict:
             "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True)
         }
         
-        train_df, _ = create_features_pytimetk(df=data, lags=lags, future=test_size)
+        train_df, _ = create_features_pytimetk(df=data, lags=lags, future=test_size, parameters=parameters)
         
-        folds, step_length = parameters.get("CV_FOLDS"), parameters.get("CV_STEP_LENGTH")
+        folds, step_length = parameters.get("CV_FOLDS"), parameters[frequency].get("CV_STEP_LENGTH")
         fh_test = list(range(1, test_size+1))
         initial_window = len(train_df) - (test_size + ((folds - 1)*step_length))
         cv = EWS(fh=fh_test, initial_window=initial_window, step_length=step_length)
         
         fit_cv_partial = partial(fit_cv_xgboost, global_data, preparated_data_dict, train_df, lags, model_params, parameters)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
+        metrics_cv = [time_limit(seconds=20)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(train_df.to_pandas())]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
     
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ======================================================= Darts =======================================================
 
@@ -492,9 +520,12 @@ def fit_cv_darts(global_data: GlobalData, preparated_data_dict: Dict[str, Union[
         List[float]: List with the results of the calculated metrics.
     """
     
-    data = preparated_data_dict.get("transformed_data").to_pandas()
-    series = TimeSeries.from_dataframe(df=data, time_col="ds", value_cols="y", freq="D")
-    test_size = parameters.get("TEST_SIZE")
+    frequency = parameters.get("FREQUENCY")
+    freq = parameters[frequency].get("FREQUENCY")
+    
+    data = preparated_data_dict.get("transformed_data").clone().to_pandas()
+    series = TimeSeries.from_dataframe(df=data, time_col="ds", value_cols="y", freq=freq)
+    test_size = parameters[frequency].get("TEST_SIZE")
     
     train = series[train_idx.tolist()]
     test = series[test_idx.tolist()].univariate_values()
@@ -536,11 +567,13 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
         List[float]: List with the values ​​of the model's performance metrics.
     """
 
+    frequency = parameters.get("FREQUENCY")
+    
     data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
 
-    sp = parameters.get("SEASONALITIES")
+    sp = parameters[frequency].get("SEASONALITIES")
     
     mm_add = ModelMode.ADDITIVE
     mm_mult = ModelMode.MULTIPLICATIVE
@@ -565,11 +598,11 @@ def objective_fourtheta(trial: Any, global_data: GlobalData, preparated_data_dic
             model_params["season_mode"] = trial.suggest_categorical("season_mode_min>0", [sm_none, sm_add, sm_mult])
 
         fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, FourTheta, False, model_params, parameters)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        metrics_cv = [time_limit(seconds=15)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
             
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ================================================== N-HiTS (Darts) ===================================================
 
@@ -588,10 +621,12 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
         List[float]: List with the values ​​of the model's performance metrics.
     """
 
+    frequency = parameters.get("FREQUENCY")
+    
     data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
-    sp = parameters.get("SEASONALITIES")
+    sp = parameters[frequency].get("SEASONALITIES")
     
     torch.manual_seed(42)
 
@@ -609,7 +644,7 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
             "random_state": 42,
             "n_epochs": trial.suggest_int("n_epochs", 20, 50),
             "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
-            "output_chunk_length": parameters.get("TEST_SIZE"),
+            "output_chunk_length": parameters[frequency].get("TEST_SIZE"),
             "num_stacks": trial.suggest_int("num_stacks", 1, 3),
             "num_blocks": trial.suggest_int("num_blocks", 1, 3),
             "num_layers": trial.suggest_int("num_layers", 1, 3),
@@ -622,11 +657,11 @@ def objective_nhits(trial: Any, global_data: GlobalData, preparated_data_dict: D
         }
         
         fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, NHiTSModel, True, model_params, parameters)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        metrics_cv = [time_limit(seconds=60)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
         
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
 
 # ================================================== TiDE (Darts) ===================================================
 
@@ -645,10 +680,12 @@ def objective_tide(trial: Any, global_data: GlobalData, preparated_data_dict: Di
         List[float]: List with the values ​​of the model's performance metrics.
     """
 
+    frequency = parameters.get("FREQUENCY")
+    
     data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
     cv = data_separators_dict.get("cv")
     len_metrics = len(global_data.metrics)
-    sp = parameters.get("SEASONALITIES")
+    sp = parameters[frequency].get("SEASONALITIES")
     
     torch.manual_seed(42)
 
@@ -666,7 +703,7 @@ def objective_tide(trial: Any, global_data: GlobalData, preparated_data_dict: Di
             "random_state": 42,
             "n_epochs": trial.suggest_int("n_epochs", 20, 50),
             "input_chunk_length": trial.suggest_categorical("input_chunck_length", sp),
-            "output_chunk_length": parameters.get("TEST_SIZE"),
+            "output_chunk_length": parameters[frequency].get("TEST_SIZE"),
             "num_encoder_layers": trial.suggest_int("num_encoder_layers", 1, 3),
             "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256]),
             "num_decoder_layers": trial.suggest_int("num_decoder_layers", 1, 3),
@@ -683,8 +720,44 @@ def objective_tide(trial: Any, global_data: GlobalData, preparated_data_dict: Di
         }
         
         fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, TiDEModel, True, model_params, parameters)
-        metrics_cv = [fit_cv_partial(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+        metrics_cv = [time_limit(seconds=150)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
     except:
-        return [np.inf] * len_metrics
+        return [None] * len_metrics
     
-    return get_optuna_metrics(metrics_cv=metrics_cv, len_metrics=len_metrics)
+    return get_optuna_metrics(metrics_cv=metrics_cv)
+
+# ========================================= Croston [Intermittent] (Darts) ==========================================
+
+def objective_croston(trial: Any, global_data: GlobalData, preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
+                      data_separators_dict: Dict[str, Union[List[int], Type[EWS]]], parameters: Dict[str, Any]) -> List[float]:
+    """Optuna study objective function for the Croston model from the Darts library.
+
+    Args:
+        trial (Any): Experiment of the optuna study.
+        global_data (GlobalData): Object of the GlobalData class.
+        preparated_data_dict (Dict[str, Union[str, pl.DataFrame]]): Dictionary with the preparated data.
+        data_separators_dict (Dict[str, Union[List[int], Type[EWS]]]): Dictionary with data separators.
+        parameters (Dict[str, Any]): Dictionary with global parameters.
+
+    Returns:
+        List[float]: List with the values ​​of the model's performance metrics.
+    """
+
+    data_array = preparated_data_dict.get("transformed_data")["y"].to_numpy()
+    cv = data_separators_dict.get("cv")
+    len_metrics = len(global_data.metrics)
+
+    try:
+        model_params = {
+            "version": trial.suggest_categorical("version", ["classic", "optimized", "sba", "tsb"]),
+        }
+        if model_params.get("version") == "tsb":
+            model_params["alpha_d"] = trial.suggest_float("alpha_d", 0.0, 1.0)
+            model_params["alpha_p"] = trial.suggest_float("alpha_p", 0.0, 1.0)
+
+        fit_cv_partial = partial(fit_cv_darts, global_data, preparated_data_dict, Croston, False, model_params, parameters)
+        metrics_cv = [time_limit(seconds=15)(fit_cv_partial)(train_idx, test_idx) for train_idx, test_idx in cv.split(data_array)]
+    except:
+        return [None] * len_metrics
+        
+    return get_optuna_metrics(metrics_cv=metrics_cv)

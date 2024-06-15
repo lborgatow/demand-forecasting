@@ -11,7 +11,8 @@ from .models import (
     objective_xgboost,
     objective_fourtheta,
     objective_nhits,
-    objective_tide
+    objective_tide,
+    objective_croston
 )
 from .get_models_results import (
     get_sma_results, 
@@ -36,6 +37,8 @@ def get_models_results(global_data: GlobalData, preparated_data_dict: Dict[str, 
         pl.DataFrame: DataFrame with the results of all models.
     """
 
+    database = parameters.get("DATABASE")
+    
     df_sma = get_sma_results(global_data=global_data, preparated_data_dict=preparated_data_dict,
                              data_separators_dict=data_separators_dict, parameters=parameters)
     
@@ -66,4 +69,12 @@ def get_models_results(global_data: GlobalData, preparated_data_dict: Dict[str, 
                                      data_separators_dict=data_separators_dict, model="TiDE",
                                      model_objective=objective_tide, parameters=parameters)
     
-    return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet, df_xgboost, df_fourtheta, df_nhits, df_tide])
+    if database == "FOOD":
+        df_croston = get_darts_results(global_data=global_data, preparated_data_dict=preparated_data_dict,
+                                       data_separators_dict=data_separators_dict, model="Croston",
+                                       model_objective=objective_croston, parameters=parameters)   
+        
+        return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet, df_xgboost, df_fourtheta, df_nhits, df_tide, df_croston])
+    
+    elif database == "STORE_ITEM":
+        return pl.concat([df_sma, df_expsmoothing, df_arima, df_prophet, df_xgboost, df_fourtheta, df_nhits, df_tide])

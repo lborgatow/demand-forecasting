@@ -2,12 +2,13 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import preprocess_data, define_global_data
 
+
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
             node(
                 func=preprocess_data,
-                inputs="raw_data",
+                inputs=["raw_data", "parameters"],
                 outputs=["processed_data", "unique_ids"],
                 name="preprocess_data_node",
             ),

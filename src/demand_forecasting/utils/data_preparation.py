@@ -35,7 +35,7 @@ def data_transformation(original_data: pl.DataFrame) -> Dict[str, Union[str, pl.
 
     transformations = {
         "original": original_data["y"].to_numpy(),
-        # "diff": np.diff(original_data["y"]),
+        # "diff": np.diff(original_data["y"]),  # Não ficou bom na maioria dos casos
         "log": np.log1p(original_data["y"]),
         "cbrt": np.cbrt(original_data["y"])
     }

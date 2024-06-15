@@ -16,9 +16,12 @@ def data_separators(preparated_data_dict: Dict[str, Union[str, pl.DataFrame]],
         Dict[str, Union[List[int], Type[EWS]]: Dictionary with data separators.
     """
 
+    frequency = parameters.get("FREQUENCY")
+    
     transformed_data = preparated_data_dict.get("transformed_data")
-    test_size, folds, step_length = parameters.get("TEST_SIZE"), parameters.get("CV_FOLDS"), \
-        parameters.get("CV_STEP_LENGTH")
+    test_size = parameters[frequency].get("TEST_SIZE")
+    folds = parameters.get("CV_FOLDS")
+    step_length = parameters[frequency].get("CV_STEP_LENGTH")
 
     fh_test = list(range(1, test_size+1))
     initial_window = len(transformed_data) - (test_size + ((folds - 1)*step_length))

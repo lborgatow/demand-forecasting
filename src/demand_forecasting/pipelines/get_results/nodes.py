@@ -28,6 +28,8 @@ def run_predictions(global_data: GlobalData, unique_id: str, aux_dict: DictProxy
         pl.DataFrame: DataFrame with the results of the models for the unique_id executed.
     """
     
+    database = parameters.get("DATABASE")
+    
     preparated_data_dict = prepare_data(global_data=global_data, unique_id=unique_id)
     data_separators_dict = data_separators(preparated_data_dict=preparated_data_dict, parameters=parameters)
     
@@ -35,8 +37,14 @@ def run_predictions(global_data: GlobalData, unique_id: str, aux_dict: DictProxy
                                         data_separators_dict=data_separators_dict, parameters=parameters)
     
     aux_dict["count"] -= 1
-    store, item = unique_id.split("_")
-    print(f"STORE: {store}; ITEM: {item}; UID: {unique_id} - CONCLUIDO; {aux_dict.get('count')} restante(s)")
+    
+    if database == "STORE_ITEM":
+        store, item = unique_id.split("_")
+        print(f"STORE: {store}; ITEM: {item}; UID: {unique_id} - CONCLUIDO; {aux_dict.get('count')} restante(s)")
+        
+    elif database == "FOOD":
+        center, meal = unique_id.split("_")
+        print(f"CENTER: {center}; MEAL: {meal}; UID: {unique_id} - CONCLUIDO; {aux_dict.get('count')} restante(s)")
     
     return models_results
 
@@ -52,6 +60,9 @@ def run_parallel_predictions(global_data: GlobalData, unique_ids: List[str], par
     Returns:
         pl.DataFrame: DataFrame with concatenated results.
     """
+
+    database = parameters.get("DATABASE")
+    frequency = parameters.get("FREQUENCY")
     
     print_title = lambda title, size: print("\n" + ("#" * size) + "\n" + title.center(size) + "\n" + ("#" * size) + "\n")
     
@@ -61,6 +72,8 @@ def run_parallel_predictions(global_data: GlobalData, unique_ids: List[str], par
     
     aux_dict = manager.dict()
     aux_dict["count"] = len(unique_ids)
+    print(f"Base de dados: {database}")
+    print(f"Frequência: {frequency}")
     print(f"UIDs encontrados: {aux_dict.get('count')}\n")
     
     results = Parallel(n_jobs=-1)(delayed(run_predictions)(global_data, unique_id, aux_dict, parameters) \

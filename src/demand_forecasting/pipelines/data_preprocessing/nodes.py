@@ -7,11 +7,12 @@ from demand_forecasting.utils.data_preprocessing import process_data, get_unique
 from demand_forecasting.utils.global_data import GlobalData
 
 
-def preprocess_data(data: pl.DataFrame) -> Tuple[pl.DataFrame, List[str]]:
+def preprocess_data(data: pl.DataFrame, parameters: Dict[str, Dict[str, Any]]) -> Tuple[pl.DataFrame, List[str]]:
     """Perform data preprocessing.
 
     Args:
         data (pl.DataFrame): DataFrame with temporal data.
+        parameters (Dict[str, Dict[str, Any]]): Dictionary with global parameters.
 
     Returns:
         Tuple[pl.DataFrame, List[str]]: Tuple with the processed DataFrame and a 
@@ -19,10 +20,10 @@ def preprocess_data(data: pl.DataFrame) -> Tuple[pl.DataFrame, List[str]]:
     """
 
     random.seed(42)
-    
-    processed_data = process_data(data=data)
+        
+    processed_data = process_data(data=data, parameters=parameters)
     unique_ids = get_unique_ids(data=processed_data)
-    unique_ids = random.sample(unique_ids, 100)
+    unique_ids = random.sample(unique_ids, round(0.2 * len(unique_ids)))
 
     return processed_data, unique_ids
 
