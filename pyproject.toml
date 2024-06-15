@@ -36,6 +36,7 @@ notebook = "7.1.3"
 ipykernel = "6.29.4"
 matplotlib = "3.8.4"
 seaborn = "0.13.2"
+kedro-viz = "9.1.0"
 
 
 [tool.poetry.scripts]
