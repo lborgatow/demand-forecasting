@@ -9,7 +9,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=run_parallel_predictions,
                 inputs=["global_data", "unique_ids", "parameters"],
                 outputs="models_results",
-                name="preprocess_data_node",
+                name="run_parallel_predictions_node",
             ),
         ],
         namespace="pipe_get_results",

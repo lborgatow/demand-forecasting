@@ -27,7 +27,7 @@ This modular pipeline preprocesses the raw data (`preprocess_data_node`) and def
 |      |                    |
 | ---- | ------------------ |
 | Type | `List[str]` |
-| Description | List containing the data unique ids (store_item) |
+| Description | List containing the data unique ids |
 
 ### `global_data`
 
